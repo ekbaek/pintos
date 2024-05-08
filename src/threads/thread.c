@@ -20,6 +20,11 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+// define sleep list
+static struct list sleep_list;
+// 가장 먼저 일어나는 thread의 tick 저장
+static int64_t next_tick_to_wakeup;
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -117,7 +122,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-
+  // sleep_list 초기화
+  list_init (&sleep_list);
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -325,19 +331,23 @@ thread_exit (void)
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+// wait stauts가 아니라 ready 상태로 전환
 void
 thread_yield (void) 
 {
   struct thread *cur = thread_current ();
   enum intr_level old_level;
-  
+  // intr_context는 인터럽트 상태인지 확인하는거
+  // intr_disable 처럼 인터럽트 비활성화하는 것과는 다름
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
     list_insert_ordered (&ready_list, &cur->elem, cmp_priority, NULL);
   cur->status = THREAD_READY;
+  // 다음 실행할 스레드 선택해서 cpu 넘겨줌
   schedule ();
+  // 이전 인터럽트 레벨로 다시 되돌림
   intr_set_level (old_level);
 }
 
@@ -616,3 +626,71 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+// next_tick_to_wakeup에 값을 저장할 함수 구현
+// the minimum value of local ticks of the threads
+void
+store_next_tick_to_wakeup (int64_t ticks)
+{
+  if (ticks > next_tick_to_wakeup)
+    next_tick_to_wakeup = next_tick_to_wakeup;
+  else
+    next_tick_to_wakeup = ticks;
+}
+
+// 가장 먼저 일어난 thread가 본인이 일어날 시간을 반환
+int64_t 
+return_next_tick_to_wakeup (void)
+{
+  return next_tick_to_wakeup;
+}
+
+// thread_sleep 구현
+// if the current thread is not idle thread,
+// change the state of the caller thread to BLOCKED,
+// store the local tick to wake up,
+// update the global tick if necessary,
+// and call schedule() 
+// When you manipulate thread list, disable interrupt! 
+void
+thread_sleep (int64_t ticks)
+{
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
+
+  ASSERT(!intr_context ());
+  old_level = intr_disable ();
+
+  ASSERT (cur != idle_thread);
+  list_push_back(&sleep_list, &cur->elem);
+  thread_block ();
+  store_next_tick_to_wakeup (cur->wakeup_tick = ticks);
+
+  intr_set_level (old_level);
+}
+
+// sleep 중인 thread 깨우는 함수 구현
+void
+thread_awake (int64_t wakeup_tick) 
+{
+  next_tick_to_wakeup = INT64_MAX;
+  struct list_elem *e;
+  e = list_begin(&sleep_list);
+
+  while (e != list_end(&sleep_list)) 
+  {
+    struct thread *t = list_entry(e, struct thread, elem);
+
+    if (t->wakeup_tick <= wakeup_tick)
+    {
+      e = list_remove(&t->elem);
+      thread_unblock(t);
+    }
+    else
+    {
+      e = list_next(e);
+      store_next_tick_to_wakeup(t->wakeup_tick);
+    }
+  }
+}

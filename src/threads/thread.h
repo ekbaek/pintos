@@ -90,9 +90,15 @@ struct thread
     int priority;                       /* Priority. */
     int original_priority;              // original_priority
     struct list_elem allelem;           /* List element for all threads list. */
+<<<<<<< HEAD
     struct lock *wait_on_lock;           // lock address for thread to wait
     struct list donations;             // threads for thread to donate priority
     struct list_elem d_elem;           // elem for donations list
+=======
+   
+   // new field for local tick
+    int64_t wakeup_tick;
+>>>>>>> 9c42189 (alarm clock 구현)
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -111,8 +117,13 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+<<<<<<< HEAD
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
 bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+=======
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux /* unused */);
+
+>>>>>>> 9c42189 (alarm clock 구현)
 void check_ready_list(void);
 
 void thread_init (void);
@@ -145,5 +156,11 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+// 추가한 함수들
+void store_next_tick_to_wakeup (int64_t);
+int64_t return_next_tick_to_wakeup (void);
+void thread_sleep (int64_t);
+void thread_awake (int64_t);
 
 #endif /* threads/thread.h */
