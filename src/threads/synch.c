@@ -224,20 +224,13 @@ lock_acquire (struct lock *lock)
     struct thread *cur = thread_current ();
     cur->wait_on_lock = lock;
     struct lock *l = lock;
+    list_insert_ordered (&l->holder->donations, &cur->d_elem, cmp_donation_priority, NULL);
 
     for (int i = 0; i < 10; i++)
     { 
       if (l == NULL)
         break;
-      if (l->holder->priority < cur->priority)
-      {
-        l->holder->priority = cur->priority;
-        list_insert_ordered (&l->holder->donations, &cur->d_elem, cmp_donation_priority, NULL);
-      }
-      else if (l->holder->original_priority < cur->priority)
-        list_insert_ordered (&l->holder->donations, &cur->d_elem, cmp_donation_priority, NULL);
-      else
-        break;
+      l->holder->priority = cur->priority;
       l = l->holder->wait_on_lock;
     }
   }
@@ -285,7 +278,6 @@ lock_release (struct lock *lock)
       if (t->wait_on_lock == lock)
         {
           list_remove (&t->d_elem);
-          break;
         }
     }
   replace_priority();
