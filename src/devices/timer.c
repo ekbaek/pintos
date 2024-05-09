@@ -170,7 +170,7 @@ timer_print_stats (void)
 /* Timer interrupt handler. */
 // 수정함
 static void
-timer_interrupt (struct intr_frame *args)
+timer_interrupt (struct intr_frame *args UNUSED)
 {
   int64_t next_wakeup_time = return_next_tick_to_wakeup ();
   if (next_wakeup_time <= ticks)
