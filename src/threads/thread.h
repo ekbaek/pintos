@@ -88,10 +88,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int original_priority;              // original_priority
     struct list_elem allelem;           /* List element for all threads list. */
     struct lock *wait_on_lock;           // lock address for thread to wait
-    struct list donation_list;          // threads for thread to donate priority
-    struct thread *donated_thread;      // thread that donate to this thread
+    struct list donations;             // threads for thread to donate priority
+    struct list_elem d_elem;           // elem for donations list
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -111,7 +112,7 @@ struct thread
 extern bool thread_mlfqs;
 
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
-
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 void check_ready_list(void);
 
 void thread_init (void);

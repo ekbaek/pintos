@@ -80,6 +80,15 @@ cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux)
     return false;
 }
 
+bool
+cmp_donation_priority (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  if (list_entry (a, struct thread, d_elem)->priority > list_entry (b, struct thread, d_elem)->priority)
+    return true;
+  else
+    return false;
+};
+
 void
 check_ready_list (void)
 {
@@ -217,7 +226,6 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-
   check_ready_list ();
 
   return tid;
@@ -256,7 +264,6 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //list_push_back (&ready_list, &t->elem);
   list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -328,7 +335,6 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    //list_push_back (&ready_list, &cur->elem);
     list_insert_ordered (&ready_list, &cur->elem, cmp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
@@ -357,7 +363,9 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  list_sort (&ready_list, cmp_priority, NULL);
+  thread_current ()->original_priority = new_priority;
+  
+  replace_priority ();
   check_ready_list ();
 }
 
@@ -485,9 +493,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority;
   t->wait_on_lock = NULL;
-  list_init(&t->donation_list);
-  t->donated_thread = NULL;
+  list_init(&t->donations);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
