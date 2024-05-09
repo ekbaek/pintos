@@ -22,6 +22,7 @@
 
 // define sleep list
 static struct list sleep_list;
+
 // 가장 먼저 일어나는 thread의 tick 저장
 static int64_t next_tick_to_wakeup;
 
@@ -628,24 +629,6 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
-// next_tick_to_wakeup에 값을 저장할 함수 구현
-// the minimum value of local ticks of the threads
-void
-store_next_tick_to_wakeup (int64_t ticks)
-{
-  if (ticks > next_tick_to_wakeup)
-    next_tick_to_wakeup = next_tick_to_wakeup;
-  else
-    next_tick_to_wakeup = ticks;
-}
-
-// 가장 먼저 일어난 thread가 본인이 일어날 시간을 반환
-int64_t 
-return_next_tick_to_wakeup (void)
-{
-  return next_tick_to_wakeup;
-}
-
 // thread_sleep 구현
 // if the current thread is not idle thread,
 // change the state of the caller thread to BLOCKED,
@@ -656,16 +639,19 @@ return_next_tick_to_wakeup (void)
 void
 thread_sleep (int64_t ticks)
 {
-  struct thread *cur = thread_current ();
+  struct thread *cur;
+  cur = thread_current ();
   enum intr_level old_level;
 
-  ASSERT(!intr_context ());
   old_level = intr_disable ();
 
   ASSERT (cur != idle_thread);
+
+  cur->wakeup_tick = ticks;
   list_push_back(&sleep_list, &cur->elem);
   thread_block ();
-  store_next_tick_to_wakeup (cur->wakeup_tick = ticks);
+  
+  
 
   intr_set_level (old_level);
 }
@@ -674,9 +660,8 @@ thread_sleep (int64_t ticks)
 void
 thread_awake (int64_t wakeup_tick) 
 {
-  next_tick_to_wakeup = INT64_MAX;
   struct list_elem *e;
-  e = list_begin(&sleep_list);
+  e = list_begin (&sleep_list);
 
   while (e != list_end(&sleep_list)) 
   {
@@ -684,13 +669,12 @@ thread_awake (int64_t wakeup_tick)
 
     if (t->wakeup_tick <= wakeup_tick)
     {
-      e = list_remove(&t->elem);
-      thread_unblock(t);
+      e = list_remove (e);
+      thread_unblock (t);
     }
     else
     {
       e = list_next(e);
-      store_next_tick_to_wakeup(t->wakeup_tick);
     }
   }
 }

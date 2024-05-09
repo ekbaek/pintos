@@ -158,8 +158,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 // 추가한 함수들
-void store_next_tick_to_wakeup (int64_t);
-int64_t return_next_tick_to_wakeup (void);
 void thread_sleep (int64_t);
 void thread_awake (int64_t);
 
