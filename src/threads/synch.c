@@ -116,7 +116,7 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   { 
-    list_sort(&sema->waiters, cmp_priority, NULL); 
+    list_sort (&sema->waiters, cmp_priority, NULL); 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
   }
@@ -167,14 +167,14 @@ replace_priority (void)
 { 
   struct thread *cur = thread_current ();
 
-  if (list_empty(&cur->donations))
+  if (list_empty (&cur->donations))
     cur->priority = cur->original_priority;
   else
   {
-    list_sort(&cur->donations, cmp_donation_priority, NULL);
+    list_sort (&cur->donations, cmp_donation_priority, NULL);
 
-    if (cur->original_priority < list_entry (list_front(&cur->donations), struct thread, d_elem)->priority)
-      cur->priority = list_entry (list_front(&cur->donations), struct thread, d_elem)->priority;
+    if (cur->original_priority < list_entry (list_front (&cur->donations), struct thread, d_elem)->priority)
+      cur->priority = list_entry (list_front (&cur->donations), struct thread, d_elem)->priority;
     else
       cur->priority = cur->original_priority;
   }
@@ -230,8 +230,11 @@ lock_acquire (struct lock *lock)
     { 
       if (l == NULL)
         break;
-      l->holder->priority = cur->priority;
-      l = l->holder->wait_on_lock;
+      else
+      {
+        l->holder->priority = cur->priority;
+        l = l->holder->wait_on_lock;
+      }   
     }
   }
   sema_down (&lock->semaphore);
@@ -276,11 +279,9 @@ lock_release (struct lock *lock)
     {
       struct thread *t = list_entry (e, struct thread, d_elem);
       if (t->wait_on_lock == lock)
-        {
-          list_remove (&t->d_elem);
-        }
+        list_remove (&t->d_elem);
     }
-  replace_priority();
+  replace_priority ();
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
