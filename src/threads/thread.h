@@ -92,9 +92,14 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
 <<<<<<< HEAD
     struct lock *wait_on_lock;           // lock address for thread to wait
+<<<<<<< HEAD
     struct list donations;             // threads for thread to donate priority
     struct list_elem d_elem;           // elem for donations list
 =======
+=======
+    struct list donations;             // threads that have donated their priority
+    struct list_elem d_elem;           // List element for donations list
+>>>>>>> ae46b8f (synch modify)
    
    // new field for local tick
     int64_t wakeup_tick;
