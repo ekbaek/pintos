@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed_point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -25,6 +26,8 @@ static struct list sleep_list;
 
 // 가장 먼저 일어나는 thread의 tick 저장
 static int64_t next_tick_to_wakeup;
+
+static int load_avg;
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -98,7 +101,7 @@ cmp_donation_priority (const struct list_elem *a, const struct list_elem *b, voi
 void
 check_ready_list (void)
 {
-  if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
+  if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_begin (&ready_list), struct thread, elem)->priority)
     thread_yield ();
 }
 
@@ -141,7 +144,7 @@ thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
-
+  load_avg = LOAD_AVG_DEFAULT;
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -373,6 +376,9 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if(thread_mlfqs)
+    return;
+  
   thread_current ()->priority = new_priority;
   thread_current ()->original_priority = new_priority;
   
@@ -391,31 +397,47 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  struct thread* t = thread_current();
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  t->nice = nice;
+  mlfq_set_priority (t);
+  check_ready_list ();
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  struct thread *t = thread_current ();
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  int nice_value = t->nice;
+  intr_set_level (old_level);
+  return nice_value;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  int load_avg_multiplied_by_100 = convert_x_to_int_rounding_to_nearest (mul_x_by_n (load_avg, 100)); //change
+  intr_set_level (old_level);
+  return load_avg_multiplied_by_100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  int recent_cpu_multiplied_by_100 = convert_x_to_int_rounding_to_nearest (mul_x_by_n (thread_current ()->recent_cpu, 100)); //change
+  intr_set_level (old_level);
+  return recent_cpu_multiplied_by_100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -505,6 +527,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->original_priority = priority;
+  t->nice = NICE_DEFAULT;
+  t->recent_cpu = RECENT_CPU_DEFAULT;
   t->wait_on_lock = NULL;
   list_init(&t->donations);
   t->magic = THREAD_MAGIC;
@@ -676,5 +700,108 @@ thread_awake (int64_t wakeup_tick)
     {
       e = list_next(e);
     }
+  }
+}
+
+void
+mlfq_set_priority (struct thread *cur)
+{
+  // priority = PRIMAX - (recent cpu / 4) - (nice * 2)
+  if (cur == idle_thread)
+    return ;
+  else 
+    {
+      int mlfq_priority;
+      int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, 4);
+      int nice_mul_2 = cur->nice * 2; //change
+      int sub_things = add_x_and_n (recent_cpu_divide_4, nice_mul_2); //change
+      mlfq_priority = convert_x_to_int_rounding_toward_zero (mul_x_by_n (sub_n_from_x (sub_things, (int)PRI_MAX), -1));
+      
+      if (mlfq_priority > PRI_MAX)
+        mlfq_priority = PRI_MAX;
+      else if (mlfq_priority < PRI_MIN)
+        mlfq_priority = PRI_MIN;
+      
+      cur->priority = mlfq_priority;
+    }
+}
+
+void
+mlfq_set_recent_cpu (struct thread *cur) //change
+{
+  // recent cpu = (2*load_avg) / (2*load_avg + 1)*recent_cpu + nice
+  if (cur == idle_thread)
+    return ;
+  else
+    {
+      int mlfq_recent_cpu;
+      int load_mul_2 = mul_x_by_n (load_avg, 2);
+      int decay = div_x_by_y (load_mul_2, add_x_and_n (load_mul_2, 1));
+      mlfq_recent_cpu = add_x_and_n (mul_x_by_y (decay, cur->recent_cpu), cur->nice);
+    
+      cur->recent_cpu = mlfq_recent_cpu;
+    }
+}
+
+void
+mlfq_set_load_avg (void)
+{
+  // load_avg = (59/60)*load_avg + (1/60)*ready_threads
+  int ready_threads;
+  if (thread_current () != idle_thread)
+    ready_threads = list_size (&ready_list) + 1;
+  else
+    ready_threads = list_size (&ready_list);
+  
+  int mlfq_load_avg;
+  int const1 = div_x_by_y (convert_n_to_fp (59), convert_n_to_fp (60));
+  int const2 = div_x_by_y (convert_n_to_fp (1), convert_n_to_fp (60));
+  int const1_mul_load_avg = mul_x_by_y (const1, load_avg);
+  int const2_mul_ready_threads = mul_x_by_n (const2, ready_threads);
+  mlfq_load_avg = add_x_and_y (const1_mul_load_avg, const2_mul_ready_threads);
+  load_avg = mlfq_load_avg;
+}
+
+void
+mlfq_increase_recent_cpu_by_1 (void)
+{
+  if (thread_current () == idle_thread)
+    return ;
+  else
+    {
+      struct thread *cur = thread_current ();
+      cur->recent_cpu = add_x_and_n (cur->recent_cpu, 1);
+    }
+}
+
+void
+mlfq_recalculate_priority (void)
+{
+  struct list_elem *e;
+  struct thread* cur;
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+    {
+      cur = list_entry (e, struct thread, allelem);
+      mlfq_set_priority (cur);
+    }
+  /*
+  if (list_empty (&ready_list))
+    return;
+  e = list_front (&ready_list);
+  cur = list_entry (e, struct thread, elem);
+  if (cur->priority > thread_get_priority ())
+    intr_yield_on_return ();
+  */
+}
+
+void
+mlfq_recalculate_recent_cpu (void)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+  {
+    struct thread *cur = list_entry (e, struct thread, allelem);
+    mlfq_set_recent_cpu (cur);
   }
 }

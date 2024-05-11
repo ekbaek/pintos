@@ -24,6 +24,10 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -89,6 +93,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int original_priority;              // original_priority
+    int nice;
+    int recent_cpu;
     struct list_elem allelem;           /* List element for all threads list. */
 <<<<<<< HEAD
     struct lock *wait_on_lock;           // lock address for thread to wait
@@ -165,5 +171,12 @@ int thread_get_load_avg (void);
 // 추가한 함수들
 void thread_sleep (int64_t);
 void thread_awake (int64_t);
+
+void mlfq_set_priority (struct thread *cur);
+void mlfq_set_recent_cpu (struct thread *cur);
+void mlfq_set_load_avg (void);
+void mlfq_increase_recent_cpu_by_1 (void);
+void mlfq_recalculate_priority (void);
+void mlfq_recalculate_recent_cpu (void);
 
 #endif /* threads/thread.h */
