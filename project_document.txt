@@ -77,10 +77,31 @@ ex)  thread A <-(holder) lockA <- (wait_on_lock)  <- thread B <-(holder) lockB (
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
+(1) sema_down
+In the sema_down function, putting things into the waiter list through list_push_back was changed to be 
+in descending order based on the priority of the thread through the list_inserted_ordered function.
+
+(2) sema_up
+By sorting the waiter list before thread_unblock, it covers cases where the priorities of threads may have changed in the waiter list.
+And since front has the highest priority in the descending waiter list, when sema_up wake up thread,
+front is taken out and removed at the same time through the list_pop_front function.
+
+(3) cond_wait and cond_signal
+An algorithm similar to (1) and (2) is used.
+The difference is that the semaphore puts a thread structure in the waiter list, but the condition variable puts a semaphore_elem structure.
+So the cmp function used is different.
+cmp_priority can directly compare thread's priority through list_entry,
+but cmp_cond_priority have to compare thread's priority through  semaphore.watiers, a member of semphore_elem, as a parameter of list_front
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
-
+If the lock's holder has a lower priority than the thread that currently called the lock_acquire() function,
+the caller donates priority to the holder.
+The maximum value of nested is set to 10, so the for statement is run a maximum of 10 times.
+At this time, access(iteration) is made through the wait_on_lock variable in order to donate to the threads nesting the lock.
+ex) l(wait_on_lock)->holder->priority = cur->priority  and next => l = l->holder->wait_on_lock and if l == NULL mean front thread in nested donation
+In nested donations, the thread that always performs lock_acquire() last will inevitably have a higher priority than the thread in front of it.
+This is because the thread at the front always receives the donation, but the fact that another thread is allocated the CPU means that a thread with a higher priority than this priority has locked_aquire even though it has received the donation.
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
 

@@ -311,7 +311,7 @@ cmp_cond_priority (const struct list_elem *a, const struct list_elem *b, void *a
   struct semaphore_elem *sema_a = list_entry (a, struct semaphore_elem, elem);
   struct semaphore_elem *sema_b = list_entry (b, struct semaphore_elem, elem);
 
-  if (list_entry (list_begin (&sema_a->semaphore.waiters), struct thread, elem)->priority > list_entry (list_begin (&sema_b->semaphore.waiters), struct thread, elem)->priority)
+  if (list_entry (list_front (&sema_a->semaphore.waiters), struct thread, elem)->priority > list_entry (list_front (&sema_b->semaphore.waiters), struct thread, elem)->priority)
     return true;
   else
     return false;
