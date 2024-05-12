@@ -68,10 +68,32 @@ This mechanism is important for optimizing CPU usage and enabling effective mult
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 
+In the implementation of thread_awake within the timer_interrupt handler, the system employs a sorted list by each thread's wakeup_tick. 
+This arrangement allows the thread_awake function to iterate through the sleep_list only until it encounters a thread whose wakeup_tick is greater than the current ticks. 
+This is crucial because once a wakeup_tick that exceeds the current ticks is found, the function can cease its iteration early, 
+ensuring that no unnecessary checks are made against threads that do not need to be woken up yet.
+
+This method significantly reduces the time spent processing each timer interrupt 
+because it avoids needless traversal of the entire list and focuses only on those threads that are due to wake up. 
+
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
+
+The first time you call timer_sleep(), thread_sleep is called. At this time, thread_sleep() disables interrupts. 
+Disabling interrupts creates an atomic operation because no other thread or interrupt handler can interrupt the process.
+
+Second, within this critical section, the current thread is added to the sleep list, the wakeup tick is stored, and the current thread is blocked. 
+At this time, this critical section must be processed all at once without interruption.
+
+Eventually, the thread becomes blocked through a thread_block() call. 
+This function transitions a thread from the running state to the non-executable (blocked) state without requiring any CPU resources until the wake-up condition is met. 
+By blocking threads within the same critical section with interrupts disabled, we ensure that threads do not continue executing in a potentially inconsistent state or with shared data.
+
+Finally, the original interrupt level is restored after the thread is safely added to the sleep_list and its state is set to blocked. 
+This operation re-enables interrupts, allowing execution of other threads and interrupt handlers. 
+Now that the important modifications have been made and the current thread is blocked, you are safe.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
