@@ -176,13 +176,12 @@ timer_interrupt (struct intr_frame *args UNUSED)
       mlfq_increase_recent_cpu_by_1 ();
       if (ticks % 4 == 0)
         mlfq_recalculate_priority ();
-      if (ticks % TIMER_FREQ == 0) //change
+      if (ticks % TIMER_FREQ == 0) 
         {
           mlfq_set_load_avg ();
           mlfq_recalculate_recent_cpu (); 
         }
     }
-  // 구현해놓은 thread_awake 추가
   thread_awake (ticks);
 }
 

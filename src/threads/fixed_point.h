@@ -1,3 +1,6 @@
+#ifndef THREADS_FIXED_POINT_H
+#define THREADS_FIXED_POINT_H
+
 #define INT_MAX ((1<<31) - 1)
 #define INT_MIN (-(1<<31))
 #define f (1<<14)
@@ -81,3 +84,5 @@ div_x_by_n (int x, int n)
 {
     return x / n;
 }
+
+#endif

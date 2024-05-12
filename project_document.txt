@@ -7,8 +7,8 @@
 ---- GROUP ----
 
 Taejun Han(20201322_한태준) <cheld7132@unist.ac.kr>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eungyeong Baek(20211143 백은경) <ekbaek@unist.ac.kr>
+
 
 ---- PRELIMINARIES ----
 

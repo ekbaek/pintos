@@ -710,8 +710,7 @@ mlfq_set_priority (struct thread *cur)
       int mlfq_priority;
       int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, -4);
       mlfq_priority = convert_x_to_int_rounding_toward_zero (add_x_and_n (recent_cpu_divide_4, PRI_MAX - 2 * cur->nice)); // change
-      //mlfq_priority = convert_x_to_int_rounding_toward_zero (sub_y_from_x (0, sub_n_from_x (sub_things, (int)PRI_MAX)));
-      
+         
       if (mlfq_priority > PRI_MAX)
         mlfq_priority = PRI_MAX;
       else if (mlfq_priority < PRI_MIN)
@@ -729,12 +728,9 @@ mlfq_set_recent_cpu (struct thread *cur) // change
     return ;
   else
     {
-      //int mlfq_recent_cpu;
       int load_mul_2 = mul_x_by_n (load_avg, 2);
       int decay = div_x_by_y (load_mul_2, add_x_and_n (load_mul_2, 1));
       cur->recent_cpu = add_x_and_n (mul_x_by_y (decay, cur->recent_cpu), cur->nice);
-    
-      //cur->recent_cpu = mlfq_recent_cpu;
     }
 }
 
@@ -772,7 +768,7 @@ void
 mlfq_recalculate_priority (void)
 {
   struct list_elem *e;
-  struct thread* cur;
+  struct thread *cur;
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
     {
       cur = list_entry (e, struct thread, allelem);
@@ -784,10 +780,11 @@ void
 mlfq_recalculate_recent_cpu (void)
 {
   struct list_elem *e;
+  struct thread *cur;
 
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
   {
-    struct thread *cur = list_entry (e, struct thread, allelem);
+    cur = list_entry (e, struct thread, allelem);
     mlfq_set_recent_cpu (cur);
   }
 }
