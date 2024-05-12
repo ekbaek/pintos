@@ -708,10 +708,9 @@ mlfq_set_priority (struct thread *cur)
   else 
     {
       int mlfq_priority;
-      int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, 4);
-      int nice_mul_2 = cur->nice * 2; //change
-      int sub_things = add_x_and_n (recent_cpu_divide_4, nice_mul_2); //change
-      mlfq_priority = convert_x_to_int_rounding_toward_zero (sub_y_from_x (0, sub_n_from_x (sub_things, (int)PRI_MAX)));
+      int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, -4);
+      mlfq_priority = convert_x_to_int_rounding_toward_zero (add_x_and_n (recent_cpu_divide_4, PRI_MAX - 2 * cur->nice)); // change
+      //mlfq_priority = convert_x_to_int_rounding_toward_zero (sub_y_from_x (0, sub_n_from_x (sub_things, (int)PRI_MAX)));
       
       if (mlfq_priority > PRI_MAX)
         mlfq_priority = PRI_MAX;
@@ -723,19 +722,19 @@ mlfq_set_priority (struct thread *cur)
 }
 
 void
-mlfq_set_recent_cpu (struct thread *cur) //change
+mlfq_set_recent_cpu (struct thread *cur) // change
 { 
   // recent cpu = (2*load_avg) / (2*load_avg + 1)*recent_cpu + nice
   if (cur == idle_thread)
     return ;
   else
     {
-      int mlfq_recent_cpu;
+      //int mlfq_recent_cpu;
       int load_mul_2 = mul_x_by_n (load_avg, 2);
       int decay = div_x_by_y (load_mul_2, add_x_and_n (load_mul_2, 1));
-      mlfq_recent_cpu = add_x_and_n (mul_x_by_y (decay, cur->recent_cpu), cur->nice);
+      cur->recent_cpu = add_x_and_n (mul_x_by_y (decay, cur->recent_cpu), cur->nice);
     
-      cur->recent_cpu = mlfq_recent_cpu;
+      //cur->recent_cpu = mlfq_recent_cpu;
     }
 }
 
@@ -748,7 +747,6 @@ mlfq_set_load_avg (void)
     ready_threads = list_size (&ready_list) + 1;
   else
     ready_threads = list_size (&ready_list);
-  //printf("ready = %d\n", ready_threads);
   int mlfq_load_avg;
   int const1 = div_x_by_y (convert_n_to_fp (59), convert_n_to_fp (60));
   int const2 = div_x_by_y (convert_n_to_fp (1), convert_n_to_fp (60));
@@ -780,14 +778,6 @@ mlfq_recalculate_priority (void)
       cur = list_entry (e, struct thread, allelem);
       mlfq_set_priority (cur);
     }
-  /*
-  if (list_empty (&ready_list))
-    return;
-  e = list_front (&ready_list);
-  cur = list_entry (e, struct thread, elem);
-  if (cur->priority > thread_get_priority ())
-    intr_yield_on_return ();
-  */
 }
 
 void
