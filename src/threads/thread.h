@@ -93,8 +93,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int original_priority;              // original_priority
-    int nice;
-    int recent_cpu;
+    int nice;                           // nice vlaue
+    int recent_cpu;                     // recent_cpu value
     struct list_elem allelem;           /* List element for all threads list. */
 <<<<<<< HEAD
     struct lock *wait_on_lock;           // lock address for thread to wait

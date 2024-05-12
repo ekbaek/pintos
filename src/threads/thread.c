@@ -101,7 +101,7 @@ cmp_donation_priority (const struct list_elem *a, const struct list_elem *b, voi
 void
 check_ready_list (void)
 {
-  if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_begin (&ready_list), struct thread, elem)->priority)
+  if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority)
     thread_yield ();
 }
 
@@ -664,19 +664,15 @@ void
 thread_sleep (int64_t ticks)
 {
   struct thread *cur;
-  cur = thread_current ();
   enum intr_level old_level;
-
+  
   old_level = intr_disable ();
-
   ASSERT (cur != idle_thread);
-
+  cur = thread_current ();
   cur->wakeup_tick = ticks;
   list_push_back(&sleep_list, &cur->elem);
   thread_block ();
   
-  
-
   intr_set_level (old_level);
 }
 
@@ -705,7 +701,7 @@ thread_awake (int64_t wakeup_tick)
 
 void
 mlfq_set_priority (struct thread *cur)
-{
+{ 
   // priority = PRIMAX - (recent cpu / 4) - (nice * 2)
   if (cur == idle_thread)
     return ;
@@ -715,7 +711,7 @@ mlfq_set_priority (struct thread *cur)
       int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, 4);
       int nice_mul_2 = cur->nice * 2; //change
       int sub_things = add_x_and_n (recent_cpu_divide_4, nice_mul_2); //change
-      mlfq_priority = convert_x_to_int_rounding_toward_zero (mul_x_by_n (sub_n_from_x (sub_things, (int)PRI_MAX), -1));
+      mlfq_priority = convert_x_to_int_rounding_toward_zero (sub_y_from_x (0, sub_n_from_x (sub_things, (int)PRI_MAX)));
       
       if (mlfq_priority > PRI_MAX)
         mlfq_priority = PRI_MAX;
@@ -728,7 +724,7 @@ mlfq_set_priority (struct thread *cur)
 
 void
 mlfq_set_recent_cpu (struct thread *cur) //change
-{
+{ 
   // recent cpu = (2*load_avg) / (2*load_avg + 1)*recent_cpu + nice
   if (cur == idle_thread)
     return ;
@@ -752,7 +748,7 @@ mlfq_set_load_avg (void)
     ready_threads = list_size (&ready_list) + 1;
   else
     ready_threads = list_size (&ready_list);
-  
+  //printf("ready = %d\n", ready_threads);
   int mlfq_load_avg;
   int const1 = div_x_by_y (convert_n_to_fp (59), convert_n_to_fp (60));
   int const2 = div_x_by_y (convert_n_to_fp (1), convert_n_to_fp (60));
