@@ -94,14 +94,36 @@ By blocking threads within the same critical section with interrupts disabled, w
 Finally, the original interrupt level is restored after the thread is safely added to the sleep_list and its state is set to blocked. 
 This operation re-enables interrupts, allowing execution of other threads and interrupt handlers. 
 Now that the important modifications have been made and the current thread is blocked, you are safe.
+That is, it is possible to avoid race conditions because list operations occur while interrupts are disabled.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+Within thread_sleep(), interrupts are disabled before the thread is modified or added to the sleep_list. 
+This ensures that timer interrupts that modify the same structure simultaneously do not occur.
+Additionally, all operations related to updating thread state and adding it to sleep_list are performed atomically while interrupts are disabled. 
+This prevents interruptions or preemptions that could lead to race conditions.
+Finally, only after the thread is safely added to the sleep_list and placed in a blocked state are interrupts re-enabled to maintain the integrity of the shared data.
+
+This method effectively prevents race conditions by ensuring safe and consistent updates to shared resources.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+I chose this design for alarm clock implementation.
+
+First, using sleep list to manage sleeping threads ensures that all operations associated with adding and removing threads are performed with minimal overhead. 
+This list allows you to insert and remove on the fly at any point within the list as needed when the thread's wake-up time is reached.
+Second, by disabling interrupts during critical sections of thread_sleep(), we ensure atomicity and prevent race conditions without complicating the design with additional locking mechanisms. 
+This approach simplifies code and improves reliability.
+Finally, the thread_awake() function iterates through the sleep_list and wakes up threads that have reached or passed their wake time. 
+This method is simple and reduces wasted CPU cycles by waking up threads only when needed.
+
+This design integrates seamlessly with Pintos' existing timer and scheduling infrastructure without requiring major modifications to other parts of the system.
+
+
 
              PRIORITY SCHEDULING
              ===================
