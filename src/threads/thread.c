@@ -24,9 +24,6 @@
 // define sleep list
 static struct list sleep_list;
 
-// 가장 먼저 일어나는 thread의 tick 저장
-static int64_t next_tick_to_wakeup;
-
 static int load_avg;
 
 /* List of processes in THREAD_READY state, that is, processes
@@ -710,7 +707,7 @@ mlfq_set_priority (struct thread *cur)
       int mlfq_priority;
       int recent_cpu_divide_4 = div_x_by_n (cur->recent_cpu, -4);
       mlfq_priority = convert_x_to_int_rounding_toward_zero (add_x_and_n (recent_cpu_divide_4, PRI_MAX - 2 * cur->nice)); // change
-         
+
       if (mlfq_priority > PRI_MAX)
         mlfq_priority = PRI_MAX;
       else if (mlfq_priority < PRI_MIN)
