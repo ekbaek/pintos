@@ -28,10 +28,42 @@ Eungyeong Baek(20211143 백은경) <ekbaek@unist.ac.kr>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In "struct thread" in "thread.h",
+we add "int64_t wakeup_tick" as struct member variable. 
+It stores the tick count at which a sleeping thread should be awakened, 
+facilitating time-specific sleep management in the scheduler.
+
+In "thread.c",
+we declare "static struct list sleep_list" as the static variable.
+A list that stores all threads currently in the sleep state, 
+enabling efficient tracking and management of threads that need to be woken up.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
+
+When the time_sleep() function is called, it facilitates pausing the calling thread for a specified number of timer ticks.
+
+The timer_sleep() function is started by calling timer_ticks(), which returns the current number of ticks since the system started. 
+Then, thread_sleep(start + ticks) is executed.
+At this time, “start + ticks” means the time when the sleeping thread will wake up.
+
+Within this thread_sleep(start + ticks), several key tasks occur.
+First of all, operations must be performed atomically to prevent race conditions. 
+Therefore, disable interrupts. And we use thread_current() to retrieve the current thread. 
+If this current thread is not an idle thread, then this current thread is added to sleep_list. 
+And changes the state of the caller thread to BLOCKED. 
+And the wakeup time of the sleeping thread is stored in the wakeup_tick property of the current thread structure. 
+Finally, interrupts are re-enabled to their original state.
+
+At this time, through the timer interrupt handler, the ticks value increases each time the timer is interrupted. 
+This handler also iteratively checks each thread's sleep_list to see if its current tick count has reached or exceeded the thread's wakeup_tick. 
+For any thread whose time has come to finally wake up, the handler removes that thread from its sleep_list and changes its state from BLOCKED to READY, effectively scheduling its execution.
+
+This implementation utilizes a timer interrupt handler to periodically check and wake up the thread when the specified sleep period has elapsed, 
+ensuring that timer_sleep() efficiently places the calling thread into a non-busy waiting state. 
+This mechanism is important for optimizing CPU usage and enabling effective multitasking within the operating system.
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?

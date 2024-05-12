@@ -24,6 +24,7 @@
 // define sleep list
 static struct list sleep_list;
 
+// define load_avg
 static int load_avg;
 
 /* List of processes in THREAD_READY state, that is, processes
@@ -666,10 +667,9 @@ thread_sleep (int64_t ticks)
   old_level = intr_disable ();
   ASSERT (cur != idle_thread);
   cur = thread_current ();
-  cur->wakeup_tick = ticks;
   list_push_back(&sleep_list, &cur->elem);
   thread_block ();
-  
+  cur->wakeup_tick = ticks;
   intr_set_level (old_level);
 }
 
