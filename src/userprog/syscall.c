@@ -81,5 +81,23 @@ halt (void)
 void 
 exit (int status) 
 {
-  p
+  struct thread *t = thread_current ();
+  thread_exit();
+  printf("%s: exit(%d)", thread_name(), status);
+}
+
+pid_t
+exec (const char *cmd_line) 
+{
+  //create child
+  struct intr_frame *f;
+  process_fork(thread_name(), f);
+  // exec program
+  process_execute(cmd_line);
+}
+
+int
+wait (pid_t pid)
+{
+  process_wait(pid);
 }
