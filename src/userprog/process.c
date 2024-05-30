@@ -64,7 +64,9 @@ start_process (void *file_name_)
   char *argv[64]; //limit=128 each one char and one white space => max 64
   int args = 0;
   for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-  {
+  { 
+    if (args == 0)
+      file_name = token;
     argv[args] = token;
     args++;
   }
