@@ -120,11 +120,20 @@ create (const char *file_name, off_t initial_size)
 fork
 
 // delete a fiel
-remove
+bool
+remove (const char *file_name)
+{
+  check_validation(file_name);
+  return filesys_remove(file_name);
+}
+
+//open file
 
 open
 
+// return file size
 filesize 
+
 
 read 
 
