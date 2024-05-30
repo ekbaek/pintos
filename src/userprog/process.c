@@ -83,7 +83,7 @@ start_process (void *file_name_)
   int padding = (int)if_.esp % 8;
   if (padding != 0)
   {
-    //padding = 8 - padding;
+    padding = 8 - padding;
     if_.esp -= padding;
     memset (if_.esp, 0, padding);
   }
