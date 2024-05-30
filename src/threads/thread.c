@@ -182,6 +182,13 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+  if (t->fdt == NULL)
+    return TID_ERROR;
+  t->fdt[0] = 1;
+  t->fdt[1] = 2;
+  t->next_fd = 2;
+
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);

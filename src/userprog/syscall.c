@@ -20,6 +20,7 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
 }
 
 void
@@ -66,4 +67,17 @@ syscall_handler (struct intr_frame *f UNUSED)
   thread_exit ();
 }
 
+bool 
+create (const char *file, unsigned initial_size)
+{
+  check_verify (file);
+  return filesys_create (file);
+}
+
+bool 
+remove (const char *file)
+{
+  check_verify (file);
+  return filesys_remove (file);
+}
 
