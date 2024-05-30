@@ -81,3 +81,27 @@ remove (const char *file)
   return filesys_remove (file);
 }
 
+int
+open (const char *file)
+{
+  check_verify (file);
+  struct file *f = filesys_open (file);
+
+  if (f == NULL)
+    return -1;
+  
+  struct thread *cur = thread_current ();
+
+  for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+  {
+    if (cur->fdt[i])
+      continue;
+    cur->next_fd = i + 1;
+    cur->fdt[i] = f;
+    return i;
+  }
+  
+  file_close (f);
+
+  return -1;
+}
