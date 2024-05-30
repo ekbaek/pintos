@@ -19,7 +19,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   // printf ("system call!\n");
   // thread_exit ();
 
-  // check validation of the pointers in parameter list
   // copy arguments on the user stack to the kernel
   // save return value of system call at eax register
 	switch (f->R.rax)
@@ -71,6 +70,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 	}  
 }
 
+// check validation of the pointers in parameter list
+void
+check_validation (struct intr_frame *f)
+{
+
+}
+
 // 추가 구현 syscall 함수
 void
 halt (void) 
@@ -82,8 +88,9 @@ void
 exit (int status) 
 {
   struct thread *t = thread_current ();
+  t->exit_status = status;
+  printf("%s: exit(%d)\n", t->name, status);
   thread_exit();
-  printf("%s: exit(%d)", thread_name(), status);
 }
 
 pid_t
@@ -101,3 +108,31 @@ wait (pid_t pid)
 {
   process_wait(pid);
 }
+
+// create file
+bool
+create (const char *file_name, off_t initial_size)
+{
+  check_validation(file_name);
+  return filesys_create(file_name, initial_size);
+}
+
+fork
+
+// delete a fiel
+remove
+
+open
+
+filesize 
+
+read 
+
+write 
+
+seek 
+
+tell 
+
+close 
+
