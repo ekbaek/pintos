@@ -59,12 +59,56 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  char *token, *save_ptr;
+  char *argv[64]; //limit=128 each one char and one white space => max 64
+  int args = 0;
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  {
+    argv[args] = token;
+    args++;
+  }
+
   success = load (file_name, &if_.eip, &if_.esp);
+
+  char *argv_address[64];
+  
+  for (int i = args - 1; i >= 0; i--)
+  {
+    if_.esp -= (strlen (argv[i]) + 1);
+    memcpy (if_.esp, argv[i], strlen (argv[i]) + 1);
+    argv_address[i] = if_.esp;
+  }
+
+  int padding = (int)if_.esp % 8;
+  if (padding != 0)
+  {
+    padding = 8 - padding;
+    if_.esp -= padding;
+    memset (if_.esp, 0, padding);
+  }
+
+  for (int i = args; i >= 0; i--)
+  {
+    if_.esp -= 8;
+    if (i == args)
+      memset (if_.esp, 0, sizeof (char**));
+    else
+      memcpy (if_.esp, &argv_address[i], sizeof (char**));
+  }
+
+  if_.esp -= 8;
+  memset (if_.esp, 0, sizeof (void *));
+
+  if_.edi = args;
+  if_.esi = (char *)if_.esp + 8; 
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  hex_dump(if_.esp, if_.esp, LOADER_PHYS_BASE - (uint64_t)if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +132,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1){}
   return -1;
 }
 
