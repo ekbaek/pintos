@@ -473,6 +473,7 @@ init_thread (struct thread *t, const char *name, int priority)
   // child list 초기화
   list_init(&(t->list_child));
   sema_init(&t->load_sema, 0); //로드 세마도 초기화
+  sema_init(&t->sema_wait, 0);
 
   intr_set_level (old_level);
 }

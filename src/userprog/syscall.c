@@ -51,7 +51,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 				exit(-1);
 			break;
 		case SYS_WAIT:
-			f->R.rax = process_wait(f->edi); //process wait 수정하러 가야함
+			f->eax = wait(f->edi);
 			break;			
     case SYS_CREATE:
       f->eax = create (f->edi, f->esi);
@@ -111,21 +111,26 @@ fork (const char *thread_name, struct intr_frame *f)
 	return process_fork(thread_name, f);
 }
 
-int
-exec (const char *file_name) 
+pid_t
+exec (const char *cmd_line) 
 {
-  check_verify(file_name);
+  check_verify(cmd_line);
 
   char *fn_copy;
   fn_copy = palloc_get_page(0);  
   if (fn_copy == NULL)
     exit(-1);
-  strlcpy (fn_copy, file_name, strlen(file_name) + 1);
+  strlcpy (fn_copy, cmd_line, strlen(cmd_line) + 1);
 
   if (process_execute(fn_copy) == -1) 
     exit(-1);
 }
 
+int
+wait (int pid)
+{
+  return process_wait(pid);
+}
 
 
 

@@ -95,6 +95,9 @@ struct thread
     struct list list_child;
     struct list_elem elem_child;
     struct semaphore load_sema;
+    struct file *running_thread;
+    struct semaphore sema_wait;
+    struct semaphore sema_exit;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
