@@ -105,3 +105,15 @@ open (const char *file)
 
   return -1;
 }
+
+int 
+filesize (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+
+  if (f == NULL)
+    return -1;
+  
+  return file_length (f);
+}
+
