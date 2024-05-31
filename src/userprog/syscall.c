@@ -117,3 +117,40 @@ filesize (int fd)
   return file_length (f);
 }
 
+int 
+read (int fd, void *buffer, unsigned length)
+{
+  check_verify (buffer);
+
+  int count = 0;
+  unsigned char *buf = buffer; //protect negative unsigned
+  
+  char key;
+  if (fd == 0)
+  {
+    for (; count < length; count++)
+    {
+      key = input_getc ();
+      *buf = key;
+      buf++;
+      if (key == '\0')
+        break;
+    }
+  }
+  else if (fd == 1)
+    return -1;
+  else
+  {
+    struct file *f = thread_current ()->fdt[fd];
+
+    if (f == NULL)
+      return -1;
+    
+    lock_acquire (&filesys_lock);
+    count = filesys_read (f, buffer, length);
+    lock_release (&filesys_lock);
+  }
+  
+  return count;
+}
+
