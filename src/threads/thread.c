@@ -198,6 +198,9 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  // 현재 스레드 자식으로 추가하는 코드
+  list_push_back(&thread_current()->list_child, &t->elem_child);
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -466,6 +469,11 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
+  // child list 초기화
+  list_init(&(t->list_child));
+  sema_init(&t->load_sema, 0); //로드 세마도 초기화
+
   intr_set_level (old_level);
 }
 

@@ -20,6 +20,45 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+struct thread *child_process (int pid);
+static void do_fork (void *aux);
+
+struct thread
+*child_process (int pid)
+{
+  struct thread *t = thread_current();
+  struct list *list_child = &t->list_child;
+  
+  struct list_elem *child_elem;
+  for (child_elem = list_begin(list_child); child_elem != list_end(list_child); child_elem = list_next(child_elem))
+  {
+    struct thread *cur = list_entry(child_elem, struct thread, elem_child);
+    if (cur->tid == pid)
+      return cur;
+  }
+  return NULL;
+}
+
+static void
+do_fork (void *aux)
+{
+
+}
+
+tid_t 
+process_fork (const char *name, struct intr_frame *f UNUSED)
+{
+  struct thread *t = thread_current();
+  memcpy(&t->parent_f, t, sizeof(struct intr_frame));
+
+  tid_t pid = thread_create(name, PRI_DEFAULT, do_fork, t);
+  if (pid == TID_ERROR)
+    return TID_ERROR;
+  
+  struct thread *child_thread = child_process(pid);
+  sema_down(&child_thread->load_sema);
+  return pid;
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -37,6 +76,11 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
+  // 추가 구현
+  // file name 분리
+  char *ptr;
+  strtok_r(file_name, " ", &ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);

@@ -3,6 +3,9 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+//추가함
+#include "threads/palloc.h"
+
 
 static void syscall_handler (struct intr_frame *);
 static void check_verify (void *address);
@@ -77,13 +80,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CLOSE:
       close (f->edi);
       break;
-	default:
-		exit(-1);
-		break;
+	  default:
+		  exit(-1);
+		  break;
 	}  
-  }
-  printf ("system call!\n");
-  thread_exit ();
+  //printf ("system call!\n");
+  //thread_exit ();
 }
 
 
@@ -103,17 +105,25 @@ exit (int status)
   thread_exit();
 }
 
-fork
-
-
-pid_t
-exec (const char *cmd_line) 
+int
+fork (const char *thread_name, struct intr_frame *f)
 {
-  //create child
-  struct intr_frame *f;
-  process_fork(thread_name(), f);
-  // exec program
-  process_execute(cmd_line);
+	return process_fork(thread_name, f);
+}
+
+int
+exec (const char *file_name) 
+{
+  check_verify(file_name);
+
+  char *fn_copy;
+  fn_copy = palloc_get_page(0);  
+  if (fn_copy == NULL)
+    exit(-1);
+  strlcpy (fn_copy, file_name, strlen(file_name) + 1);
+
+  if (process_execute(fn_copy) == -1) 
+    exit(-1);
 }
 
 
