@@ -154,3 +154,54 @@ read (int fd, void *buffer, unsigned length)
   return count;
 }
 
+int
+write (int fd, const void *buffer, unsigned length)
+{
+  check_verify (buffer);
+
+  int count = 0;
+
+  if (fd == 0)
+    return -1;
+  else if (fd == 1)
+  {
+    putbuf (buffer, length);
+    return length;
+  }
+  else
+  {
+    struct file *f = thread_current ()->fdt[fd];
+    if (f == NULL)
+      return -1;
+    lock_acquire (&filesys_lock);
+    count = file_write (f, buffer, length);
+    lock_release (&filesys_lock);
+  }
+
+  return count;
+}
+
+void 
+seek (int fd, unsigned position)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  if (f == NULL)
+    return
+  file_seek (f, position);
+}
+
+unsigned 
+tell (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  if (f == NULL)
+    return -1;
+  return file_tell (f);
+}
+
+void
+close (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  return file_close (f);
+}
