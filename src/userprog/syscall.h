@@ -9,7 +9,7 @@ void syscall_init (void);
 void halt (void);
 void exit (int status);
 int fork (const char *thread_name, struct intr_frame *f);
-int exec (const char *file_name);
+pid_t exec (const char *cmd_line);
 int wait (int pid);
 
 #endif /* userprog/syscall.h */
