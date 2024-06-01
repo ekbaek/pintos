@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 //추가함
 #include "threads/palloc.h"
+#include "threads/vaddr.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -216,7 +217,7 @@ read (int fd, void *buffer, unsigned length)
       return -1;
     
     lock_acquire (&filesys_lock);
-    count = filesys_read (f, buffer, length);
+    count = file_read (f, buffer, length);
     lock_release (&filesys_lock);
   }
   

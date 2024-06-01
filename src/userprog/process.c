@@ -52,7 +52,7 @@ pte_duplicate (uint64_t *pte, void *va, void *aux)
   if (is_kernel_vaddr(va))
     return true;
 
-  parent_page = pml4_get_page(parent->pagedir, va);
+  parent_page = pagedir_get_page(parent->pagedir, va);
   if (parent_page == NULL)
     return false;
 
@@ -61,9 +61,9 @@ pte_duplicate (uint64_t *pte, void *va, void *aux)
     return false;
 
   memcpy(new_page, parent_page, PGSIZE);
-  writable = is_writable(pte);
+  writable = pagedir_is_dirty(pte, new_page);
 
-  if (!pml4_set_page(t->pagedir, va, new_page, writable))
+  if (!pagedir_set_page(t->pagedir, va, new_page, writable))
     return false;
   return true;  
 }
@@ -79,7 +79,7 @@ do_fork (void *aux)
 
   memcpy(&f, parent_f, sizeof(struct intr_frame));
   f.eax = 0;
-  t->pagedir = pml4_create();
+  t->pagedir = pagedir_create();
   if (t->pagedir == NULL)
     goto error;
   //보류
@@ -89,7 +89,7 @@ do_fork (void *aux)
   if (!supplemental_page_table_copy(&t->spt, &parent->spt))
     goto error;
 #else
-  if (!pml4_for_each(parent->pagedir, pte_duplicate, parent))
+  if (!pagedir_for_each(parent->pagedir, pte_duplicate, parent))
     goto error;
 #endif
 
@@ -108,7 +108,7 @@ do_fork (void *aux)
   process_init();
 
   if (check)
-    do_iret(&f);
+    asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&f) : "memory");
 error:
   sema_up(&t->load_sema);
   exit(TID_ERROR);
