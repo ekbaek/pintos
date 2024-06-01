@@ -177,23 +177,25 @@ start_process (void *file_name_)
   char *argv[64]; //limit=128 each one char and one white space => max 64
   int args = 0;
   for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-  {
+  { 
+    if (args == 0)
+      file_name = token;
     argv[args] = token;
     args++;
   }
 
   success = load (file_name, &if_.eip, &if_.esp);
 
-  char *argv_address[64];
+  char *argv_address[64]; //argv's address array
   
-  for (int i = args - 1; i >= 0; i--)
+  for (int i = args - 1; i >= 0; i--) //argv's value is put in stack
   {
     if_.esp -= (strlen (argv[i]) + 1);
     memcpy (if_.esp, argv[i], strlen (argv[i]) + 1);
     argv_address[i] = if_.esp;
   }
 
-  int padding = (int)if_.esp % 8;
+  int padding = (int)if_.esp % 8; //padding for 8 multiple
   if (padding != 0)
   {
     padding = 8 - padding;
@@ -201,15 +203,18 @@ start_process (void *file_name_)
     memset (if_.esp, 0, padding);
   }
 
-  for (int i = args; i >= 0; i--)
+  //argv last NULL pointer => 0
+  if_.esp -= 8; 
+  memset (if_.esp, 0, sizeof (char**));
+
+  //argv'address is put in stack
+  for (int i = args - 1; i >= 0; i--)
   {
     if_.esp -= 8;
-    if (i == args)
-      memset (if_.esp, 0, sizeof (char**));
-    else
-      memcpy (if_.esp, &argv_address[i], sizeof (char**));
+    memcpy (if_.esp, &argv_address[i], sizeof (char**));
   }
 
+  //return address
   if_.esp -= 8;
   memset (if_.esp, 0, sizeof (void *));
 

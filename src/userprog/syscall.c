@@ -19,7 +19,6 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
-
 void
 syscall_init (void) 
 {
@@ -132,5 +131,141 @@ wait (int pid)
   return process_wait(pid);
 }
 
+bool 
+create (const char *file, unsigned initial_size)
+{
+  check_verify (file);
+  return filesys_create (file);
+}
 
+bool 
+remove (const char *file)
+{
+  check_verify (file);
+  return filesys_remove (file);
+}
 
+int
+open (const char *file)
+{
+  check_verify (file);
+  struct file *f = filesys_open (file);
+
+  if (f == NULL)
+    return -1;
+  
+  struct thread *cur = thread_current ();
+
+  for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+  {
+    if (cur->fdt[i])
+      continue;
+    cur->next_fd = i + 1;
+    cur->fdt[i] = f;
+    return i;
+  }
+  
+  file_close (f);
+
+  return -1;
+}
+
+int 
+filesize (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+
+  if (f == NULL)
+    return -1;
+  
+  return file_length (f);
+}
+
+int 
+read (int fd, void *buffer, unsigned length)
+{
+  check_verify (buffer);
+
+  int count = 0;
+  unsigned char *buf = buffer; //protect negative unsigned
+  
+  char key;
+  if (fd == 0)
+  {
+    for (; count < length; count++)
+    {
+      key = input_getc ();
+      *buf = key;
+      buf++;
+      if (key == '\0')
+        break;
+    }
+  }
+  else if (fd == 1)
+    return -1;
+  else
+  {
+    struct file *f = thread_current ()->fdt[fd];
+
+    if (f == NULL)
+      return -1;
+    
+    lock_acquire (&filesys_lock);
+    count = filesys_read (f, buffer, length);
+    lock_release (&filesys_lock);
+  }
+  
+  return count;
+}
+
+int
+write (int fd, const void *buffer, unsigned length)
+{
+  check_verify (buffer);
+
+  int count = 0;
+
+  if (fd == 0)
+    return -1;
+  else if (fd == 1)
+  {
+    putbuf (buffer, length);
+    return length;
+  }
+  else
+  {
+    struct file *f = thread_current ()->fdt[fd];
+    if (f == NULL)
+      return -1;
+    lock_acquire (&filesys_lock);
+    count = file_write (f, buffer, length);
+    lock_release (&filesys_lock);
+  }
+
+  return count;
+}
+
+void 
+seek (int fd, unsigned position)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  if (f == NULL)
+    return
+  file_seek (f, position);
+}
+
+unsigned 
+tell (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  if (f == NULL)
+    return -1;
+  return file_tell (f);
+}
+
+void
+close (int fd)
+{
+  struct file *f = thread_current ()->fdt[fd];
+  return file_close (f);
+}
