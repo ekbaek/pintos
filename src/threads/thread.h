@@ -92,6 +92,15 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+  
+   //fork 위한 추가 정의
+    struct intr_frame parent_f;
+    struct list list_child;
+    struct list_elem elem_child;
+    struct semaphore load_sema;
+    struct file *running_thread;
+    struct semaphore sema_wait;
+    struct semaphore sema_exit;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

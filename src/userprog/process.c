@@ -20,6 +20,114 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+struct thread *child_process (int pid);
+static bool pte_duplicate (uint64_t *pte, void *va, void *aux);
+static void do_fork (void *aux);
+
+struct thread
+*child_process (int pid)
+{
+  struct thread *t = thread_current();
+  struct list *list_child = &t->list_child;
+  
+  struct list_elem *child_elem;
+  for (child_elem = list_begin(list_child); child_elem != list_end(list_child); child_elem = list_next(child_elem))
+  {
+    struct thread *cur = list_entry(child_elem, struct thread, elem_child);
+    if (cur->tid == pid)
+      return cur;
+  }
+  return NULL;
+}
+
+static bool
+pte_duplicate (uint64_t *pte, void *va, void *aux)
+{
+  struct thread *t = thread_current();
+  struct thread *parent = (struct thread *)aux;
+  void *parent_page;
+  void *new_page;
+  bool writable;
+
+  if (is_kernel_vaddr(va))
+    return true;
+
+  parent_page = pml4_get_page(parent->pml4, va);
+  if (parent_page == NULL)
+    return false;
+
+  new_page = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (new_page == NULL)
+    return false;
+
+  memcpy(new_page, parent_page, PGSIZE);
+  writable = is_writable(pte);
+
+  if (!pml4_set_page(t->pml4, va, new_page, writable))
+    return false;
+  return true;  
+}
+
+static void
+do_fork (void *aux)
+{
+  struct intr_frame f;
+  struct thread *parent = (struct thread *)aux;
+  struct thread *t = thread_current();
+  struct intr_frame *parent_f = &parent->parent_f;
+  bool check = true;
+
+  memcpy(&f, parent_f, sizeof(struct intr_frame));
+  f.eax = 0;
+  t->pml4 = pml4_create();
+  if (t->pml4 == NULL)
+    goto error;
+
+  process_activate(t);
+#ifdef VM
+  supplemental_page_table_init(&t->spt);
+  if (!supplemental_page_table_copy(&t->spt, &parent->spt))
+    goto error;
+#else
+  if (!pml4_for_each(parent->pml4, pte_duplicate, parent))
+    goto error;
+#endif
+
+  for (int i = 0; i < FDT_COUNT_LIMIT; i++)
+  {
+    struct file *file = parent->fdt[i];
+    if (file == NULL)
+      continue;
+    if (file > 2)
+      file = file_duplicate(file);
+    t->fdt[i] = file;
+  }
+  t->next_fd = parent->next_fd;
+
+  sema_up(&t->load_sema);
+  process_init();
+
+  if (check)
+    do_iret(&f);
+error:
+  sema_up(&t->load_sema);
+  exit(TID_ERROR);
+}
+
+tid_t 
+process_fork (const char *name, struct intr_frame *f UNUSED)
+{
+  struct thread *t = thread_current();
+  memcpy(&t->parent_f, t, sizeof(struct intr_frame));
+
+  tid_t pid = thread_create(name, PRI_DEFAULT, do_fork, t);
+  if (pid == TID_ERROR)
+    return TID_ERROR;
+  
+  struct thread *child_thread = child_process(pid);
+  sema_down(&child_thread->load_sema);
+  return pid;
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -37,6 +145,11 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
+  // 추가 구현
+  // file name 분리
+  char *ptr;
+  strtok_r(file_name, " ", &ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -137,8 +250,15 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1){}
-  return -1;
+  struct thread *child_thread = child_process(child_tid);
+  if (child_thread == NULL)
+    return -1;
+  
+  sema_down(&child_thread->sema_wait);
+  list_remove(&child_thread->elem_child);
+  sema_up(&child_thread->sema_exit);
+
+  return child_thread->status_to_exit;
 }
 
 /* Free the current process's resources. */
@@ -164,6 +284,10 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  file_close(cur->running_thread); // 파일 닫는 코드 추가함
+
+  sema_up(&cur->sema_wait);
+  sema_down(&cur->sema_exit);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -351,6 +475,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+  // 구조체에 파일 저장해놓고, 수정 못하도록 하기
+  t->running_thread = file;
+  file_deny_write(file);
+
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
@@ -362,7 +490,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file); // 바로 닫지 말고, process_exit에서 파일 닫을거임
   return success;
 }
 

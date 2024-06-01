@@ -3,6 +3,9 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+//추가함
+#include "threads/palloc.h"
+
 
 static void syscall_handler (struct intr_frame *);
 static void check_verify (void *address);
@@ -35,6 +38,20 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   switch (f->eax)
   {
+		case SYS_HALT:
+			halt();
+			break;
+		case SYS_EXIT:
+			exit(f->edi);
+			break;
+		case SYS_EXEC:
+			f->eax = fork(f->edi, f);
+			if (exec(f->edi) == -1)
+				exit(-1);
+			break;
+		case SYS_WAIT:
+			f->eax = wait(f->edi);
+			break;			
     case SYS_CREATE:
       f->eax = create (f->edi, f->esi);
       break;
@@ -62,9 +79,56 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CLOSE:
       close (f->edi);
       break;
-  }
-  printf ("system call!\n");
-  thread_exit ();
+	  default:
+		  exit(-1);
+		  break;
+	}  
+  //printf ("system call!\n");
+  //thread_exit ();
+}
+
+
+// 추가 구현 syscall 함수
+void
+halt (void) 
+{
+  shutdown_power_off();
+}
+
+void 
+exit (int status) 
+{
+  struct thread *t = thread_current ();
+  t->exit_status = status;
+  printf("%s: exit(%d)\n", t->name, status);
+  thread_exit();
+}
+
+int
+fork (const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
+}
+
+pid_t
+exec (const char *cmd_line) 
+{
+  check_verify(cmd_line);
+
+  char *fn_copy;
+  fn_copy = palloc_get_page(0);  
+  if (fn_copy == NULL)
+    exit(-1);
+  strlcpy (fn_copy, cmd_line, strlen(cmd_line) + 1);
+
+  if (process_execute(fn_copy) == -1) 
+    exit(-1);
+}
+
+int
+wait (int pid)
+{
+  return process_wait(pid);
 }
 
 bool 
