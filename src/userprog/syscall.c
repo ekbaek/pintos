@@ -9,6 +9,11 @@
 
 static void syscall_handler (struct intr_frame *);
 static void check_verify (void *address);
+void halt (void);
+void exit (int status);
+int fork (const char *thread_name, struct intr_frame *f);
+pid_t exec (const char *cmd_line);
+int wait (int pid);
 bool create (const char *file, unsigned initial_size);
 bool remove (const char *file);
 int open (const char *file);
@@ -99,7 +104,7 @@ void
 exit (int status) 
 {
   struct thread *t = thread_current ();
-  t->exit_status = status;
+  t->status_to_exit = status;
   printf("%s: exit(%d)\n", t->name, status);
   thread_exit();
 }
@@ -267,5 +272,5 @@ void
 close (int fd)
 {
   struct file *f = thread_current ()->fdt[fd];
-  return file_close (f);
+  file_close (f);
 }

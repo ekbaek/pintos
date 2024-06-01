@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
+#include "interrupt.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -101,6 +103,7 @@ struct thread
     struct file *running_thread;
     struct semaphore sema_wait;
     struct semaphore sema_exit;
+    int status_to_exit;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

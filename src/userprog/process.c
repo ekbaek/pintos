@@ -52,7 +52,7 @@ pte_duplicate (uint64_t *pte, void *va, void *aux)
   if (is_kernel_vaddr(va))
     return true;
 
-  parent_page = pml4_get_page(parent->pml4, va);
+  parent_page = pml4_get_page(parent->pagedir, va);
   if (parent_page == NULL)
     return false;
 
@@ -63,7 +63,7 @@ pte_duplicate (uint64_t *pte, void *va, void *aux)
   memcpy(new_page, parent_page, PGSIZE);
   writable = is_writable(pte);
 
-  if (!pml4_set_page(t->pml4, va, new_page, writable))
+  if (!pml4_set_page(t->pagedir, va, new_page, writable))
     return false;
   return true;  
 }
@@ -79,17 +79,17 @@ do_fork (void *aux)
 
   memcpy(&f, parent_f, sizeof(struct intr_frame));
   f.eax = 0;
-  t->pml4 = pml4_create();
-  if (t->pml4 == NULL)
+  t->pagedir = pml4_create();
+  if (t->pagedir == NULL)
     goto error;
-
-  process_activate(t);
+  //보류
+  process_activate();
 #ifdef VM
   supplemental_page_table_init(&t->spt);
   if (!supplemental_page_table_copy(&t->spt, &parent->spt))
     goto error;
 #else
-  if (!pml4_for_each(parent->pml4, pte_duplicate, parent))
+  if (!pml4_for_each(parent->pagedir, pte_duplicate, parent))
     goto error;
 #endif
 
