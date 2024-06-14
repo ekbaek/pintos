@@ -4,9 +4,15 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-
 // pal zero 사용하려고!
 #include "threads/palloc.h" 
+// pid_t
+#include "lib/user/syscall.h"
+
+void halt (void);
+void exit (int status);
+pid_t exec (const char *cmd_line);
+int wait (int pid);
 
 static void syscall_handler (struct intr_frame *);
 
@@ -89,7 +95,7 @@ exec (const char *cmd_line)
 }
 
 int 
-wait (pid_t pid)
+wait (int pid)
 {
   return process_wait (pid);
 }

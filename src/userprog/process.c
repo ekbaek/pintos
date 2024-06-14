@@ -48,7 +48,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   // add
-  sema_down(&cur->load_lock);
+  //sema_down(&cur->load_lock);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
@@ -56,7 +56,7 @@ process_execute (const char *file_name)
   for (child_elem; child_elem != list_end(ch_list); child_elem = list_next(child_elem))
   {
     t = list_entry(child_elem, struct thread, child_list_elem);
-    if (t->exit_code == -1)
+    if (t->status_exit == -1)
       return process_wait (tid);
   }
   return tid;
@@ -107,18 +107,18 @@ process_wait (tid_t child_tid UNUSED)
 {
   struct thread* cur = thread_current();
   struct thread* t;
-  struct list *ch_list = &cur->child_list;
-  struct list_elem *child_elem = list_begin(ch_list);
+  //struct list *ch_list = &cur->child_list;
+  struct list_elem *child_elem = list_begin(&cur->child_list);
 
-  for (child_elem; child_elem != list_end(ch_list); child_elem = list_next(child_elem))
+  for (child_elem; child_elem != list_end(&cur->child_list); child_elem = list_next(child_elem))
   {
     t = list_entry(child_elem, struct thread, child_list_elem);
     if (child_tid == t->tid)
     {
-      sema_down(&child_elem->wait_semaphore);
-      list_remove(&child_elem->child_list_elem);
-      sema_up(&child_elem->exit_semaphore);
-      return child_elem->status_exit;
+      sema_down(&t->wait_semaphore);
+      list_remove(&t->child_list_elem);
+      sema_up(&t->exit_semaphore);
+      return t->status_exit;
     }
   }
   return -1;
