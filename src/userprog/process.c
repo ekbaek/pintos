@@ -62,7 +62,20 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  char *argv[64];
+  int args = 0;
+
+  char *token, *save_ptr;
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr))
+  {
+    argv[args] = token;
+    args++;
+  }
+
   success = load (file_name, &if_.eip, &if_.esp);
+
+  
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
