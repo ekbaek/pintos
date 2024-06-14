@@ -97,6 +97,13 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int status_exit; // syscall에 exit에 전달할 때 exit 상태 사용하려고
+
+    struct semaphore wait_semaphore;
+    struct semaphore exit_semaphore;
+
+    struct list child_list;
+    struct list_elem child_list_elem;
+
 #endif
 
     /* Owned by thread.c. */
