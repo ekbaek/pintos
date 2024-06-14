@@ -18,6 +18,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+// process_wait 함수에서 cond_wait, cond_signal 사용하려고
+#include "threads/synch.h"
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -30,6 +33,10 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct thread *cur = thread_current();
+  struct thread *t;
+  struct list *ch_list = &cur->child_list;
+  struct list_elem *child_elem = list_begin(ch_list);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -42,9 +49,21 @@ process_execute (const char *file_name)
   token = strtok_r (file_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
+
+  // add
+  //sema_down(&cur->load_lock);
+
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+
+  for (child_elem; child_elem != list_end(ch_list); child_elem = list_next(child_elem))
+  {
+    t = list_entry(child_elem, struct thread, child_list_elem);
+    if (t->status_exit == -1)
+      return process_wait (tid);
+  }
   return tid;
 }
 
@@ -142,7 +161,22 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  for(int i = 0; i < 10000000; i++){}
+  struct thread* cur = thread_current();
+  struct thread* t;
+  //struct list *ch_list = &cur->child_list;
+  struct list_elem *child_elem = list_begin(&cur->child_list);
+
+  for (child_elem; child_elem != list_end(&cur->child_list); child_elem = list_next(child_elem))
+  {
+    t = list_entry(child_elem, struct thread, child_list_elem);
+    if (child_tid == t->tid)
+    {
+      sema_down(&t->wait_semaphore);
+      list_remove(&t->child_list_elem);
+      sema_up(&t->exit_semaphore);
+      return t->status_exit;
+    }
+  }
   return -1;
 }
 
@@ -169,6 +203,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  // 코드 추가  
+  sema_up (&(cur->wait_semaphore));
+  sema_down (&(cur->exit_semaphore));
 }
 
 /* Sets up the CPU for running user code in the current

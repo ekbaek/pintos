@@ -4,6 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
+#include "list.h"
+#include "interrupt.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -96,10 +99,18 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    struct semaphore wait_semaphore;
+    struct semaphore exit_semaphore;
+
+    struct list child_list;
+    struct list_elem child_list_elem;
+
+    int status_exit; // syscall에 exit에 전달할 때 exit 상태 사용하려고
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int status_exit;
+
     struct file **fdt;
     int next_fd;
 #endif

@@ -7,6 +7,16 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
+// pal zero 사용하려고!
+#include "threads/palloc.h" 
+// pid_t
+#include "lib/user/syscall.h"
+
+void halt (void);
+void exit (int status);
+pid_t exec (const char *cmd_line);
+int wait (int pid);
+
 static void syscall_handler (struct intr_frame *);
 
 void valid_address(const uint64_t *cur_addr)
@@ -16,6 +26,7 @@ void valid_address(const uint64_t *cur_addr)
 		exit(-1);
 	}
 }
+
 
 void
 syscall_init (void) 
@@ -27,19 +38,21 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  switch(f->eax) {
-		case SYS_HALT:
-			halt();
+  switch (f->eax)
+  {
+    case SYS_HALT:
+      halt();
       break;
 		case SYS_EXIT:
 			exit(f->edi);
-      break;
+			break;
 		case SYS_EXEC:
-			f->eax = exec(f->edi);
-      break;
+			if (exec(f->edi) == -1)
+				exit(-1);
+			break;
 		case SYS_WAIT:
 			f->eax = wait(f->edi);
-      break;
+			break;	
 		case SYS_CREATE:
 			f->eax = create(f->edi, f->esi);
       break;		
@@ -218,4 +231,47 @@ close (int fd)
 {
   struct file *f = thread_current ()->fdt[fd];
   file_close (f);
+}
+
+void 
+halt (void)
+{
+  shutdown_power_off ();
+}
+
+void
+exit (int status)
+{
+  struct thread *t = thread_current();
+  // cur->status를 바꿔야 하나?
+  t->status_exit = status;
+
+  // t->name or thread_name()
+  printf("%s: exit(%d)\n", thread_name(), status);
+  thread_exit();
+}
+
+pid_t
+exec (const char *cmd_line)
+{
+  valid_address(cmd_line);
+
+  char *fn_copy;
+  fn_copy = palloc_get_page(PAL_ZERO);  
+  if (fn_copy == NULL)
+    exit(-1);
+
+  strlcpy (fn_copy, cmd_line, strlen(cmd_line) + 1);
+
+  if (process_execute(fn_copy) == -1) 
+    exit(-1);
+  
+  NOT_REACHED();
+  return 0;
+}
+
+int 
+wait (int pid)
+{
+  return process_wait (pid);
 }
