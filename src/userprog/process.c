@@ -153,8 +153,8 @@ start_process (void *file_name_)
 
   for (int i = args -1; i >= 0; i--)
   {
-    (*esp) -= 8;
-    memcpy (*esp, &argv[i], sizeof(char **));
+    (*esp) -= sizeof (uint32_t **);
+    *(uint32_t **)*esp = argv[i];
   }
 
   *esp -= sizeof(uint32_t **);
