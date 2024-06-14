@@ -107,28 +107,26 @@ bool
 create (const char *file, unsigned initial_size)
 {
   valid_address (file);
-  // bool success = filesys_create (file, initial_size);
-  // if(success)
-  //   return true;
-  // else
-  //   return false;
   if (file == NULL)
     exit(-1);
-  return filesys_create (file, initial_size);
+  bool success = filesys_create (file, initial_size);
+  if(success)
+    return true;
+  else
+    return false;
 }
 
 bool
 remove (const char *file)
 {
-  //valid_address (file);
-  // bool success = filesys_remove (file);
-  // if(success)
-  //   return true;
-  // else
-  //   return false;
+  valid_address (file);
   if (file == NULL)
     exit(-1);
-  return filesys_remove (file);
+  bool success = filesys_remove (file);
+  if(success)
+    return true;
+  else
+    return false;
 }
 
 int
