@@ -38,8 +38,11 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char *token, *save_ptr;
+  token = strtok_r (file_name, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -59,12 +62,63 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  char *argv[64];
+  int args = 0;
+
+  char *token, *save_ptr;
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr))
+  {
+    argv[args] = token;
+    args++;
+  }
+
   success = load (file_name, &if_.eip, &if_.esp);
+
+  void **esp = &if_.esp;
+  char *argv_address[64]; //argv 주소 저장
+
+  for (int i = args - 1; i >= 0; i--)
+  {
+    int len = strlen (argv[i]) + 1;
+    *esp -= len;
+    memcpy (*esp, argv[i], len);
+    argv_address[i] = *esp;
+  }
+
+  int padding = (int)*esp % 8;
+  for (int i = 0; i < padding; i++)
+  {
+    (*esp)--;
+    **(uint8_t **)esp = 0; //1byte단위로 0채우기위해 uint8_t캐스팅
+  }
+
+  (*esp) -= 8;
+  memset (*esp, 0, sizeof (char **));
+
+  for (int i = args -1; i >= 0; i--)
+  {
+    (*esp) -= 8;
+    memcpy (*esp, &argv_address[i], sizeof(char **));
+  }
+
+  *esp -= sizeof(uint32_t **);
+  *(uint32_t *)*esp = *esp + 4; //argv_adress 주소위치
+
+  *esp -= sizeof(uint32_t);
+  *(uint32_t *)*esp = args;
+
+  (*esp) -= 8;
+  memset (*esp, 0, sizeof(void *));
+
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  hex_dump(if_.esp, if_.esp, LOADER_PHYS_BASE - (uint64_t)if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +142,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  for(int i = 0; i < 10000000; i++){}
   return -1;
 }
 
