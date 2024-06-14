@@ -96,6 +96,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int status_exit; // syscall에 exit에 전달할 때 exit 상태 사용하려고
 #endif
 
     /* Owned by thread.c. */
