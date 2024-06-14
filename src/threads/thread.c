@@ -182,13 +182,6 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-  if (t->fdt == NULL)
-    return TID_ERROR;
-  t->fdt[0] = 1;
-  t->fdt[1] = 2;
-  t->next_fd = 2;
-
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -204,9 +197,6 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-  // 현재 스레드 자식으로 추가하는 코드
-  list_push_back(&thread_current()->list_child, &t->elem_child);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -476,12 +466,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
-
-  // child list 초기화
-  list_init(&(t->list_child));
-  sema_init(&t->load_sema, 0); //로드 세마도 초기화
-  sema_init(&t->sema_wait, 0);
-
   intr_set_level (old_level);
 }
 

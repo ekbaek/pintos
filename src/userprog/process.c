@@ -20,114 +20,6 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-struct thread *child_process (int pid);
-static bool pte_duplicate (uint64_t *pte, void *va, void *aux);
-static void do_fork (void *aux);
-
-struct thread
-*child_process (int pid)
-{
-  struct thread *t = thread_current();
-  struct list *list_child = &t->list_child;
-  
-  struct list_elem *child_elem;
-  for (child_elem = list_begin(list_child); child_elem != list_end(list_child); child_elem = list_next(child_elem))
-  {
-    struct thread *cur = list_entry(child_elem, struct thread, elem_child);
-    if (cur->tid == pid)
-      return cur;
-  }
-  return NULL;
-}
-
-static bool
-pte_duplicate (uint64_t *pte, void *va, void *aux)
-{
-  struct thread *t = thread_current();
-  struct thread *parent = (struct thread *)aux;
-  void *parent_page;
-  void *new_page;
-  bool writable;
-
-  if (is_kernel_vaddr(va))
-    return true;
-
-  parent_page = pagedir_get_page(parent->pagedir, va);
-  if (parent_page == NULL)
-    return false;
-
-  new_page = palloc_get_page(PAL_USER | PAL_ZERO);
-  if (new_page == NULL)
-    return false;
-
-  memcpy(new_page, parent_page, PGSIZE);
-  writable = pagedir_is_dirty(pte, new_page);
-
-  if (!pagedir_set_page(t->pagedir, va, new_page, writable))
-    return false;
-  return true;  
-}
-
-static void
-do_fork (void *aux)
-{
-  struct intr_frame f;
-  struct thread *parent = (struct thread *)aux;
-  struct thread *t = thread_current();
-  struct intr_frame *parent_f = &parent->parent_f;
-  bool check = true;
-
-  memcpy(&f, parent_f, sizeof(struct intr_frame));
-  f.eax = 0;
-  t->pagedir = pagedir_create();
-  if (t->pagedir == NULL)
-    goto error;
-  //보류
-  process_activate();
-#ifdef VM
-  supplemental_page_table_init(&t->spt);
-  if (!supplemental_page_table_copy(&t->spt, &parent->spt))
-    goto error;
-#else
-  if (!pagedir_for_each(parent->pagedir, pte_duplicate, parent))
-    goto error;
-#endif
-
-  for (int i = 0; i < FDT_COUNT_LIMIT; i++)
-  {
-    struct file *file = parent->fdt[i];
-    if (file == NULL)
-      continue;
-    if (file > 2)
-      file = file_duplicate(file);
-    t->fdt[i] = file;
-  }
-  t->next_fd = parent->next_fd;
-
-  sema_up(&t->load_sema);
-  process_init();
-
-  if (check)
-    asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&f) : "memory");
-error:
-  sema_up(&t->load_sema);
-  exit(TID_ERROR);
-}
-
-tid_t 
-process_fork (const char *name, struct intr_frame *f UNUSED)
-{
-  struct thread *t = thread_current();
-  memcpy(&t->parent_f, t, sizeof(struct intr_frame));
-
-  tid_t pid = thread_create(name, PRI_DEFAULT, do_fork, t);
-  if (pid == TID_ERROR)
-    return TID_ERROR;
-  
-  struct thread *child_thread = child_process(pid);
-  sema_down(&child_thread->load_sema);
-  return pid;
-}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -145,11 +37,6 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
-  // 추가 구현
-  // file name 분리
-  char *ptr;
-  strtok_r(file_name, " ", &ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -172,61 +59,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-
-  char *token, *save_ptr;
-  char *argv[64]; //limit=128 each one char and one white space => max 64
-  int args = 0;
-  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-  { 
-    if (args == 0)
-      file_name = token;
-    argv[args] = token;
-    args++;
-  }
-
   success = load (file_name, &if_.eip, &if_.esp);
-
-  char *argv_address[64]; //argv's address array
-  
-  for (int i = args - 1; i >= 0; i--) //argv's value is put in stack
-  {
-    if_.esp -= (strlen (argv[i]) + 1);
-    memcpy (if_.esp, argv[i], strlen (argv[i]) + 1);
-    argv_address[i] = if_.esp;
-  }
-
-  int padding = (int)if_.esp % 8; //padding for 8 multiple
-  if (padding != 0)
-  {
-    padding = 8 - padding;
-    if_.esp -= padding;
-    memset (if_.esp, 0, padding);
-  }
-
-  //argv last NULL pointer => 0
-  if_.esp -= 8; 
-  memset (if_.esp, 0, sizeof (char**));
-
-  //argv'address is put in stack
-  for (int i = args - 1; i >= 0; i--)
-  {
-    if_.esp -= 8;
-    memcpy (if_.esp, &argv_address[i], sizeof (char**));
-  }
-
-  //return address
-  if_.esp -= 8;
-  memset (if_.esp, 0, sizeof (void *));
-
-  if_.edi = args;
-  if_.esi = (char *)if_.esp + 8; 
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
-
-  hex_dump(if_.esp, if_.esp, LOADER_PHYS_BASE - (uint64_t)if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -250,15 +88,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  struct thread *child_thread = child_process(child_tid);
-  if (child_thread == NULL)
-    return -1;
-  
-  sema_down(&child_thread->sema_wait);
-  list_remove(&child_thread->elem_child);
-  sema_up(&child_thread->sema_exit);
-
-  return child_thread->status_to_exit;
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -284,10 +114,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  file_close(cur->running_thread); // 파일 닫는 코드 추가함
-
-  sema_up(&cur->sema_wait);
-  sema_down(&cur->sema_exit);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -475,10 +301,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-  // 구조체에 파일 저장해놓고, 수정 못하도록 하기
-  t->running_thread = file;
-  file_deny_write(file);
-
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
@@ -490,7 +312,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  //file_close (file); // 바로 닫지 말고, process_exit에서 파일 닫을거임
+  file_close (file);
   return success;
 }
 

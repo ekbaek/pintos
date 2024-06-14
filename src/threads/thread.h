@@ -4,8 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "synch.h"
-#include "interrupt.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -25,9 +23,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
-#define FDT_PAGES 3
-#define FDT_COUNT_LIMIT 128
 
 /* A kernel thread or user process.
 
@@ -94,21 +89,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-  
-   //fork 위한 추가 정의
-    struct intr_frame parent_f;
-    struct list list_child;
-    struct list_elem elem_child;
-    struct semaphore load_sema;
-    struct file *running_thread;
-    struct semaphore sema_wait;
-    struct semaphore sema_exit;
-    int status_to_exit;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct file **fdt;
-    int next_fd;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
