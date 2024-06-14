@@ -477,19 +477,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 
-  // for (int i = 0; i < 128; i++)
-  // {
-  //   t->fdt[i] = NULL;
-  // }
-  // // list, semaphore initalization code
-  // t->parent_thread = running_thread ();
-  // list_init(&(t->child_list));
-  // sema_init(&t->wait_semaphore, 0);
-  // sema_init(&t->exit_semaphore, 0);
-  // sema_init(&t->load_semaphore, 0);
-  // list_push_back(&(running_thread ()->child_list), &(t->child_list_elem));
-
-// MYCODE_START
 #ifdef USERPROG
   for (int i=0; i<128; i++)
     t->fdt[i] = NULL;

@@ -3,7 +3,7 @@
 #include "threads/synch.h"
 #include "lib/user/syscall.h"
 
-//struct lock filesys_lock;
+struct lock filesys_lock;
 void syscall_init (void);
 void halt (void);
 void exit (int status);

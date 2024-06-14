@@ -132,51 +132,27 @@ remove (const char *file)
 int
 open (const char *file)
 {
-  // valid_address (file);
-  // struct file *f = filesys_open (file);
-
-  // if (f == NULL)
-  //   return -1;
-  
-  // struct thread *cur = thread_current ();
-
-  // for (int i = 2; i < FDT_COUNT_LIMIT; i++)
-  // {
-  //   if (cur->fdt[i])
-  //     continue;
-  //   cur->next_fd = i + 1;
-  //   cur->fdt[i] = f;
-  //   return i;
-  // }
-  
-  // file_close (f);
-
-  // return -1;
+  valid_address (file);
   if (file == NULL)
     exit(-1);
-  valid_address (file);
-  // lock_acquire (&file_lock);
-  struct file *return_file = filesys_open (file);
-  if (return_file == NULL)
-    return -1;
-  else
-  {
-    for (int i=3; i<128; i++)
-    {
-      if (getfile(i) == NULL)
-      {
-        if (strcmp (thread_current()->name, file) == false)
-          file_deny_write (return_file);
+  struct file *f = filesys_open (file);
 
-        thread_current()->fdt[i] = return_file;
-//printf("  >> filesys_open(file) success, return %d, idx of fd", i);
-        // lock_release (&file_lock);
-        return i;
-      }
-    }
-//printf("  >> filesys_open(file) failed ; thread's fd is full, return -1\n");
+  if (f == NULL)
+    return -1;
+  
+  struct thread *cur = thread_current ();
+
+  for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+  {
+    if (cur->fdt[i])
+      continue;
+    cur->next_fd = i + 1;
+    cur->fdt[i] = f;
+    return i;
   }
-  // lock_release (&file_lock);
+  
+  file_close (f);
+
   return -1;
 }
 
@@ -196,128 +172,71 @@ read (int fd, void *buffer, unsigned length)
 {
   valid_address (buffer);
 
-  // int count = 0;
-  // unsigned char *buf = buffer; //protect negative unsigned
+  int count = 0;
+  unsigned char *buf = buffer; //protect negative unsigned
   
-  // char key;
-  // if (fd == 0)
-  // {
-  //   for (; count < length; count++)
-  //   {
-  //     key = input_getc ();
-  //     *buf = key;
-  //     buf++;
-  //     if (key == '\0')
-  //       break;
-  //   }
-  // }
-  // else if (fd == 1)
-  //   return -1;
-  // else
-  // {
-  //   struct file *f = thread_current ()->fdt[fd];
-
-  //   if (f == NULL)
-  //     return -1;
-    
-  //   lock_acquire (&filesys_lock);
-  //   count = file_read (f, buffer, length);
-  //   lock_release (&filesys_lock);
-  // }
-  
-  // return count;
+  char key;
   if (fd == 0)
   {
-    /* input_getc() 를 이용해 키보드 입력을 버퍼에 넣는다. 그리고 입력된 사이즈(bytes)를 리턴한다. */
-    int i;
-    for (i=0; i<length; i++)
+    for (; count < length; count++)
     {
-      if ( ( (char *)buffer)[i] == '\0')
+      key = input_getc ();
+      *buf = key;
+      buf++;
+      if (key == '\0')
         break;
     }
-    // lock_release (&file_lock);
-    return i;
   }
+  else if (fd == 1)
+    return -1;
   else
   {
-    struct file *f = getfile (fd);
+    struct file *f = thread_current ()->fdt[fd];
+
     if (f == NULL)
-      exit(-1);
-    else
-    {
-      // lock_release (&file_lock);
-      return file_read (f, buffer, length);
-    }
+      return -1;
+    
+    //lock_acquire (&filesys_lock);
+    count = file_read (f, buffer, length);
+    //lock_release (&filesys_lock);
   }
+  
+  return count;
 }
 
 int
 write (int fd, const void *buffer, unsigned length)
 {
-  // valid_address (buffer);
-
-  // int count = 0;
-
-  // if (fd == 0)
-  //   return -1;
-  // else if (fd == 1)
-  // {
-  //   putbuf (buffer, length);
-  //   return length;
-  // }
-  // else
-  // {
-  //   struct file *f = thread_current ()->fdt[fd];
-  //   if (f == NULL)
-  //     return -1;
-  //   lock_acquire (&filesys_lock);
-  //   count = file_write (f, buffer, length);
-  //   lock_release (&filesys_lock);
-  // }
-  //   return count;
   valid_address (buffer);
-  // lock_acquire (&file_lock);
-  if (fd == 1)
+
+  int count = 0;
+
+  if (fd == 0)
+    return -1;
+  else if (fd == 1)
   {
-    /* putbuf() 함수를 이용하여 버퍼의 내용을 콘솔에 입력한다. 이 때에는 필요한 사이즈만큼 반복문을 돌아야 한다. */
     putbuf (buffer, length);
     return length;
   }
   else
   {
-    struct file *f = getfile (fd);
+    struct file *f = thread_current ()->fdt[fd];
     if (f == NULL)
-    {
-      // lock_release (&file_lock);
-      exit(-1);
-    }
-    if (f)
-    {
-      file_deny_write (f);
-    }
-    // lock_release (&file_lock);
-    return file_write (f, buffer, length);
+      return -1;
+    //lock_acquire (&filesys_lock);
+    count = file_write (f, buffer, length);
+    //lock_release (&filesys_lock);
   }
-}
-
-struct file
-*getfile (int fd)
-{
-  return (thread_current()->fdt[fd]);
+    return count;
 }
 
 void 
 seek (int fd, unsigned position)
 {
-  // struct file *f = thread_current ()->fdt[fd];
-  // if (f == NULL)
-  //   return 
-  // file_seek (f, position);
-  struct file *f = getfile (fd);
+  struct file *f = thread_current ()->fdt[fd];
   if (f == NULL)
     exit(-1);
-  else
-    return file_seek (f, position);
+  file_seek (f, position);
 }
 
 unsigned 
@@ -332,9 +251,7 @@ tell (int fd)
 void
 close (int fd)
 {
-  // struct file *f = thread_current ()->fdt[fd];
-  // file_close (f);
-  struct file *f = getfile (fd);
+  struct file *f = thread_current ()->fdt[fd];
   if (f == NULL)
     exit(-1);
   else
