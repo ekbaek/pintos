@@ -3,7 +3,7 @@
 #include "threads/synch.h"
 #include "lib/user/syscall.h"
 
-struct lock filesys_lock;
+//struct lock filesys_lock;
 void syscall_init (void);
 void halt (void);
 void exit (int status);
@@ -18,4 +18,5 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
 #endif /* userprog/syscall.h */
