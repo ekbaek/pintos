@@ -182,12 +182,12 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-  if (t->fdt == NULL)
-    return TID_ERROR;
-  t->fdt[0] = 1;
-  t->fdt[1] = 2;
-  t->next_fd = 2;
+  // t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+  // if (t->fdt == NULL)
+  //   return TID_ERROR;
+  // t->fdt[0] = 1;
+  // t->fdt[1] = 2;
+  // t->next_fd = 2;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -204,6 +204,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+// 추가함
+  //list_push_back(&(thread_current()->child_list), &(t->child_list_elem));
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -473,13 +475,31 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
-
-  // list, semaphore initalization code
-  list_init(&t->child_list);
-  sema_init(&t->wait_semaphore, 0);
-  sema_init(&t->exit_semaphore, 0);
-
   intr_set_level (old_level);
+
+  // for (int i = 0; i < 128; i++)
+  // {
+  //   t->fdt[i] = NULL;
+  // }
+  // // list, semaphore initalization code
+  // t->parent_thread = running_thread ();
+  // list_init(&(t->child_list));
+  // sema_init(&t->wait_semaphore, 0);
+  // sema_init(&t->exit_semaphore, 0);
+  // sema_init(&t->load_semaphore, 0);
+  // list_push_back(&(running_thread ()->child_list), &(t->child_list_elem));
+
+// MYCODE_START
+#ifdef USERPROG
+  for (int i=0; i<128; i++)
+    t->fdt[i] = NULL;
+  t->parent_thread = running_thread();
+  sema_init (&t->wait_semaphore, 0);
+  sema_init (&t->exit_semaphore, 0);
+  sema_init (&t->load_semaphore, 0);
+  list_init (&(t->child_list));
+  list_push_back(&(running_thread ()->child_list), &(t->child_list_elem));
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
