@@ -15,6 +15,25 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  switch (f->eax)
+  {
+    case SYS_HALT:
+      halt();
+      break;
+		case SYS_EXIT:
+			exit(f->edi);
+			break;
+		case SYS_EXEC:
+			if (exec(f->edi) == -1)
+				exit(-1);
+			break;
+		case SYS_WAIT:
+			f->eax = wait(f->edi);
+			break;	
+    default:
+      exit(-1);
+      break;
+  }
   printf ("system call!\n");
   thread_exit ();
 }
