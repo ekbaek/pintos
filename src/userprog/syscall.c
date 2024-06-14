@@ -6,6 +6,14 @@
 
 static void syscall_handler (struct intr_frame *);
 
+// void valid_address(const uint64_t *cur_addr)
+// {
+// 	if (!(is_user_vaddr(cur_addr)) || cur_addr == NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
 void
 syscall_init (void) 
 {
