@@ -131,14 +131,14 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   void **esp = &if_.esp;
-  char *argv_address[64]; //argv 주소 저장
+  //char *argv_address[64]; //argv 주소 저장
 
   for (int i = args - 1; i >= 0; i--)
   {
     int len = strlen (argv[i]) + 1;
     *esp -= len;
     memcpy (*esp, argv[i], len);
-    argv_address[i] = *esp;
+    argv[i] = *esp;
   }
 
   int padding = (int)*esp % 8;
@@ -148,13 +148,13 @@ start_process (void *file_name_)
     **(uint8_t **)esp = 0; //1byte단위로 0채우기위해 uint8_t캐스팅
   }
 
-  (*esp) -= 8;
-  memset (*esp, 0, sizeof (char **));
+  (*esp) -= 4;
+  *(uint8_t *)*esp = 0;
 
   for (int i = args -1; i >= 0; i--)
   {
     (*esp) -= 8;
-    memcpy (*esp, &argv_address[i], sizeof(char **));
+    memcpy (*esp, &argv[i], sizeof(char **));
   }
 
   *esp -= sizeof(uint32_t **);
@@ -163,8 +163,8 @@ start_process (void *file_name_)
   *esp -= sizeof(uint32_t);
   *(uint32_t *)*esp = args;
 
-  (*esp) -= 8;
-  memset (*esp, 0, sizeof(void *));
+  (*esp) -= 4;
+  *(uint32_t *)*esp = 0;
 
 
 
