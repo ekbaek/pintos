@@ -106,6 +106,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 
     int status_exit; // syscall에 exit에 전달할 때 exit 상태 사용하려고
+    int complete_load; // syscall.c->exec에서 load success 확인용
     struct semaphore wait_semaphore;
     struct semaphore exit_semaphore;
     struct semaphore load_semaphore;

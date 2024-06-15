@@ -28,76 +28,48 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-tid_t
-process_execute (const char *file_name) 
+tid_t process_execute (const char *file_name) 
 {
-  // char *fn_copy = NULL;
-  // tid_t tid;
-  // struct thread *cur = thread_current();
-  // struct thread *t = NULL;
-  // struct list *child_list = &cur->child_list;
-  // struct list_elem *child_elem = NULL;
-
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  // fn_copy = palloc_get_page (0);
-  // if (fn_copy == NULL)
-  //   return TID_ERROR;
-  // strlcpy (fn_copy, file_name, PGSIZE);
-
-  // char *token;
-  // char *save_ptr;
-  // token = strtok_r (file_name, " ", &save_ptr);
-  // if (filesys_open (token) == NULL)
-  //   return -1;
-  // /* Create a new thread to execute FILE_NAME. */
-
-  // tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
-  // sema_down(&cur->load_semaphore);
-  // if (tid == TID_ERROR)
-  //   palloc_free_page (fn_copy); 
-
-
-  // for (child_elem = list_begin(child_list); child_elem != list_end(child_list); child_elem = list_next(child_elem))
-  // {
-  //   t = list_entry(child_elem, struct thread, child_list_elem);
-  //   if (t->status_exit == -1)
-  //     return process_wait (tid);
-  // }
-  // return tid;
-  char *fn_copy;
+  char *fn_copy = NULL;
   tid_t tid;
+  struct thread *cur = thread_current();
+  struct thread *t = NULL;
+  struct list *child_list = &cur->child_list;
+  struct list_elem *child_elem = NULL;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
+  // Make a copy of FILE_NAME.
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE); /* fn_copy 에 file_name 을 복사, 단 PGSIZE 사이즈를 넘으면 안됨. */
+  strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-
-  // PLAN
-  // file_name 의 첫 인자가 진짜 file name 이다.
-  char* dummyptr;
-  char* token = strtok_r(file_name, " ", &dummyptr); // 여기에 &save_ptr 대신 NULL을 넣어도 무방함. save_ptr은 이후 안쓰임. 함 해보까?
-  // >> 여기에 NULL 넣어줬더니 kernel PANIC 떠서 dummyptr 해줌.
-  if (filesys_open (token) == NULL)
+  // Extract the executable name
+  char *token;
+  char *save_ptr;
+  token = strtok_r (file_name, " ", &save_ptr);
+  if (filesys_open (token) == NULL) {
+    palloc_free_page (fn_copy); // Free the allocated page if file doesn't exist
     return -1;
-  // MYCODE_END
+  }
 
-  struct thread *current = thread_current();
+  // Initialize load_sema before creating a new thread
+  sema_init(&cur->load_semaphore, 0);
+
+  // Create a new thread to execute FILE_NAME
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
-  sema_down (&current->load_semaphore);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  
-  struct list_elem* iter = NULL;
-  struct thread *elem = NULL;
-  for (iter = list_begin(&(current->child_list)); iter != list_end(&(current->child_list)); iter = list_next(iter))
+  if (tid == TID_ERROR) {
+    palloc_free_page (fn_copy);
+    return tid;
+  }
+
+  // Wait for the load_sema to ensure the process has loaded
+  sema_down(&cur->load_semaphore);
+
+  // Check if the child thread has successfully loaded the executable
+  for (child_elem = list_begin(child_list); child_elem != list_end(child_list); child_elem = list_next(child_elem))
   {
-    elem = list_entry (iter, struct thread, child_list_elem);
-    if (elem->status_exit == -1)
+    t = list_entry(child_elem, struct thread, child_list_elem);
+    if (t->status_exit == -1) // Adjust this condition based on your implementation
       return process_wait (tid);
   }
   return tid;
@@ -128,10 +100,10 @@ start_process (void *file_name_)
     args++;
   }
 
+  // Attempt to load the executable
   success = load (file_name, &if_.eip, &if_.esp);
 
   void **esp = &if_.esp;
-  //char *argv_address[64]; //argv 주소 저장
 
   for (int i = args - 1; i >= 0; i--)
   {
@@ -145,7 +117,7 @@ start_process (void *file_name_)
   for (int i = 0; i < padding; i++)
   {
     (*esp)--;
-    **(uint8_t **)esp = 0; //1byte단위로 0채우기위해 uint8_t캐스팅
+    **(uint8_t **)esp = 0; 
   }
 
   (*esp) -= 4;
@@ -158,7 +130,7 @@ start_process (void *file_name_)
   }
 
   *esp -= sizeof(uint32_t **);
-  *(uint32_t *)*esp = *esp + 4; //argv 주소위치
+  *(uint32_t *)*esp = *esp + 4; 
 
   *esp -= sizeof(uint32_t);
   *(uint32_t *)*esp = args;
@@ -166,15 +138,13 @@ start_process (void *file_name_)
   (*esp) -= 4;
   *(uint32_t *)*esp = 0;
 
-
+  /* Signal the parent thread with the load status */
+  sema_up (&thread_current ()->parent_thread->load_semaphore);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  sema_up (&thread_current ()->parent_thread->load_semaphore);
   if (!success) 
     thread_exit ();
-
-  //hex_dump(if_.esp, if_.esp, LOADER_PHYS_BASE - (uint64_t)if_.esp, true);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -185,217 +155,6 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
-
-// static void
-// start_process (void *file_name_)
-// {
-// //printf(" >> start_process() start!\n");
-//   char *file_name = file_name_;
-//   struct intr_frame if_;
-//   bool success;
-
-//   /* Initialize interrupt frame and load executable. */
-//   memset (&if_, 0, sizeof if_);
-//   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG; // User data selector(뭔가 단위인듯)
-//   if_.cs = SEL_UCSEG;
-//   if_.eflags = FLAG_IF | FLAG_MBS;
-
-//   /*
-//     여기에서 file_name parsing 하고, load의 인자인 file_name에 파일명만 넣기
-//   */
-
-
-
-
-
-// ////////////////// strtok start ////////////////////
-// // input: char *file_name
-
-// //printf("    >> MYCODE_START\n");
-//   // MYCODE_START
-//   // using strtok_r reference: https://codeday.me/ko/qa/20190508/495336.html
-//   char *ptr; // make q point to start of file_name.
-//   char *rest; // to point to the rest of the string after token extraction.
-//   char *token; // to point to the actual token returned.
-
-//   /* init cpy_file_name for calculating argc. */
-//   char *cpy_file_name = (char *)malloc (sizeof (file_name));
-//   strlcpy (cpy_file_name, file_name, strlen(file_name) + 1);
-
-//   ptr = cpy_file_name;
-
-//   /*
-//   argv[0] = prog_name
-//   argv[1] = 1st arg
-//   argv[2] = 2nd arg
-//   ...
-//   */
-   
-//   char **argv;
-//   int argc = 0;
-//   /* Get argc's length. */
-// //printf("  >> Get argc's length; while loop.\n");
-//   token = strtok_r (ptr, " ", &rest);
-// //printf("    >> obtd token: %s\n", token);
-// //printf("       in argc: %d\n", argc);
-//   argc ++;
-//   ptr = rest;
-//   while (token != NULL)
-//   {
-//     token = strtok_r (ptr, " ", &rest);
-// //printf("    >> obtd token: %s\n", token);
-// //printf("       in argc: %d\n", argc);
-//     argc ++;
-//     ptr = rest;
-//   }
-//   argc --;
-// //printf("    >> summery argc: %d\n", argc);
-//   free (cpy_file_name);
-
-//   argv = (char **)malloc(sizeof(char *) * argc);
-
-//   ptr = file_name;
-//   // loop untill strtok_r return NULL
-   
-//   int i = 0;
-//   token = strtok_r (ptr, " ", &rest);
-//   argv[i] = token;
-// //printf("      >> saved argv: %s\n", argv[i]);
-// //printf("      >> i: %d\n", i);
-//   i ++;
-//   ptr = rest;
-//   while (i != argc)
-//   {
-//     token = strtok_r (ptr, " ", &rest);
-//     argv[i] = token;
-// //printf("      >> saved argv: %s\n", argv[i]);
-// //printf("      >> i: %d\n", i);
-//     i ++;
-//     ptr = rest;
-//   }
-//   // MYCODE_END
-// //printf("    >> MYCODE_END\n");
-
-// // output: char **argv, int argc
-// ////////////////// strtok end ////////////////////
-
-
-
-
-
-//   success = load (argv[0], &if_.eip, &if_.esp);
-// //printf(" >> in start_process(), load() returns true!\n");
-
-
-
-
-
-
-//   if (success)
-//   {
-//     //  push_to_esp (&if_.esp, &file_name, &&argv, argc);
-//     void **esp = &if_.esp;
-// //printf(" >> push_to_esp invoked!\n");
-// //printf("  >> passed argc: %d\n", argc);
-
-//     /* push command line (in argv) value.
-
-//         ls      -l      foo      bar
-//       argv[0]   [1]     [2]      [3]
-
-//       these will be pushed in right-to-left order.
-//       each size is (strlen (argv[i])) + 1
-//     */
-
-//     int length = 0;
-// //printf("  >> for loop pushing argv execute.\n");
-//     for (int i = argc - 1; i >= 0; i--)
-//     {
-// //printf("  >> i: %d\n", i);
-//       length = strlen (argv[i]) + 1; // '\n'도 넣기 위해 +1
-// //printf("  >> length of argv[i]: %d\n", length);
-//       *esp -= length;
-// //printf("      >> extract by: %d\n", length + 1);
-//       memcpy (*esp, argv[i], length);
-//       // strlcpy (*esp, argv[i], length + 1);
-//       argv[i] = *esp;
-//     }
-
-// //printf("  >> push command line finished / push word-align start\n");
-//     /* push word-align. */
-//     while ( (PHYS_BASE - *esp) % 4 != 0 ){
-// //printf("      >> PHYS_BASE - *esp = %d\n", PHYS_BASE - *esp);
-// //printf("      >> , so we extract stack %d\n", sizeof (uint8_t));
-// //printf("      >> , and push 0.\n");
-//       *esp -= sizeof (uint8_t);
-//       **(uint8_t **)esp = 0;
-//     }
-
-// //printf("  >> push word-align finished / push NULL start\n");
-
-//     /* push NULL */
-//     *esp -= 4;
-//     *(uint8_t *)*esp = 0;
-
-// //printf("  >> push NULL finished / push address of argv[i] start\n");
-
-//     /* push address of argv[i]. */
-//     for (int i = argc - 1; i >= 0; i--)
-//     {
-//       *esp -= sizeof (uint32_t **);
-// //printf("      >> extract by: %d\n", sizeof (uint32_t **));
-//       *(uint32_t **)*esp = argv[i];
-//     }
-
-// //printf("  >> push address of argv[i] finished / push address of argv start\n");
-
-//     /* push address of argv. */
-//     *esp -= sizeof (uint32_t **);
-// //printf("      >> extract by: %d\n", sizeof (uint32_t **));
-//     *(uint32_t *)*esp = *esp + 4;
-
-// //printf("  >> push address of argv finished / push the value of argc start\n");
-
-//     /* push the value of argc. */
-//     *esp -= sizeof (uint32_t);
-// //printf("      >> extract by: %d\n", sizeof (uint32_t));
-//     *(uint32_t *)*esp = argc;
-
-// //printf("  >> push the value of argc finished / push return address start\n");
-
-//     /* push return address. */
-//     // 리턴어드레스의 크기는 4란다.
-//     *esp -= 4;
-//     *(uint32_t *)*esp = 0;
-// //printf("  >> push return address finished / free(argv) start\n");
-
-// // hex_dump (*esp, *esp, 100, 1);  
-//     free (argv);
-// //printf(" >> push_to_esp end!\n");
-// // MYCODE_END
-//   }
-
-
-
-
-
-//   /* If load failed, quit. */
-//   palloc_free_page (file_name);
-//   sema_up (&thread_current()->parent_thread->load_semaphore);
-//   if (!success) 
-//     thread_exit ();
-
-//   /* Start the user process by simulating a return from an
-//      interrupt, implemented by intr_exit (in
-//      threads/intr-stubs.S).  Because intr_exit takes all of its
-//      arguments on the stack in the form of a `struct intr_frame',
-//      we just point the stack pointer (%esp) to our stack frame
-//      and jump to it. */
-// //printf(" >> in start_process(), invoking asm volatile()... \n");
-//   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-// //printf(" >> in start_process(), asm volatile() finished! \n ");
-//   NOT_REACHED ();
-// }
 
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
@@ -433,6 +192,7 @@ void
 process_exit (void)
 {
   struct thread *cur = thread_current ();
+  struct thread *parent = cur->parent_thread;
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
@@ -451,7 +211,14 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  // 코드 추가  
+
+  // 코드 추가 
+  if (parent != NULL)
+  {
+    if (parent->complete_load == 0)
+      parent->complete_load = -1;
+    sema_up(&parent->load_semaphore);
+  } 
   sema_up (&(cur->wait_semaphore));
   sema_down (&(cur->exit_semaphore));
 }

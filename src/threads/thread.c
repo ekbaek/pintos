@@ -470,6 +470,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->complete_load = 0;
   t->status_exit = 0;
   t->magic = THREAD_MAGIC;
 
@@ -477,7 +478,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 
-#ifdef USERPROG
   for (int i=0; i<128; i++)
     t->fdt[i] = NULL;
   t->parent_thread = running_thread();
@@ -486,7 +486,6 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&t->load_semaphore, 0);
   list_init (&(t->child_list));
   list_push_back(&(running_thread ()->child_list), &(t->child_list_elem));
-#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

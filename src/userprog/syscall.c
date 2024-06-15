@@ -261,9 +261,6 @@ close (int fd)
   }
 }
 
-
-// part2
-
 void 
 halt (void)
 {
@@ -285,8 +282,7 @@ exit (int status)
   thread_exit();
 }
 
-pid_t
-exec (const char *cmd_line)
+pid_t exec (const char *cmd_line)
 {
   valid_address(cmd_line);
 
@@ -295,13 +291,21 @@ exec (const char *cmd_line)
   if (fn_copy == NULL)
     exit(-1);
 
-  strlcpy (fn_copy, cmd_line, strlen(cmd_line) + 1);
+  strlcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
 
-  if (process_execute(fn_copy) == -1) 
+  pid_t pid = process_execute(fn_copy);
+  if (pid == -1) 
     exit(-1);
+
+  // Parent process waits for load success/failure signal
+  struct thread *cur = thread_current();
+  cur->complete_load = 0;
+  sema_down(&cur->load_semaphore);
+
+  if (cur->complete_load == -1)
+    return -1;
   
-  NOT_REACHED();
-  return 0;
+  return pid;
 }
 
 int 
