@@ -138,8 +138,10 @@ start_process (void *file_name_)
   (*esp) -= 4;
   *(uint32_t *)*esp = 0;
 
+  struct thread *cur = thread_current();
   /* Signal the parent thread with the load status */
-  sema_up (&thread_current ()->parent_thread->load_semaphore);
+  cur->parent_thread->complete_load = success ? 1 : -1;
+  sema_up (&cur->parent_thread->load_semaphore);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
