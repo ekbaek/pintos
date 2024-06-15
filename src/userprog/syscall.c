@@ -183,9 +183,7 @@ read (int fd, void *buffer, unsigned length)
     if (f == NULL)
       return -1;
     
-    //lock_acquire (&filesys_lock);
     count = file_read (f, buffer, length);
-    //lock_release (&filesys_lock);
   }
   
   return count;
@@ -210,9 +208,7 @@ write (int fd, const void *buffer, unsigned length)
     struct file *f = thread_current ()->fdt[fd];
     if (f == NULL)
       return -1;
-    //lock_acquire (&filesys_lock);
     count = file_write (f, buffer, length);
-    //lock_release (&filesys_lock);
   }
     return count;
 }

@@ -37,39 +37,33 @@ tid_t process_execute (const char *file_name)
   struct list *child_list = &cur->child_list;
   struct list_elem *child_elem = NULL;
 
-  // Make a copy of FILE_NAME.
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  // Extract the executable name
   char *token;
   char *save_ptr;
   token = strtok_r (file_name, " ", &save_ptr);
   if (filesys_open (token) == NULL) {
-    palloc_free_page (fn_copy); // Free the allocated page if file doesn't exist
+    palloc_free_page (fn_copy); 
     return -1;
   }
 
-  // Initialize load_sema before creating a new thread
   sema_init(&cur->load_semaphore, 0);
 
-  // Create a new thread to execute FILE_NAME
   tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
     palloc_free_page (fn_copy);
     return tid;
   }
 
-  // Wait for the load_sema to ensure the process has loaded
   sema_down(&cur->load_semaphore);
 
-  // Check if the child thread has successfully loaded the executable
   for (child_elem = list_begin(child_list); child_elem != list_end(child_list); child_elem = list_next(child_elem))
   {
     t = list_entry(child_elem, struct thread, child_list_elem);
-    if (t->status_exit == -1) // Adjust this condition based on your implementation
+    if (t->status_exit == -1) 
       return process_wait (tid);
   }
   return tid;
@@ -109,7 +103,6 @@ start_process (void *file_name_)
     args++;
   }
 
-  // Attempt to load the executable
   success = load (file_name, &if_.eip, &if_.esp);
 
   void **esp = &if_.esp;
@@ -230,7 +223,6 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
-  // 코드 추가 
   if (parent != NULL)
   {
     if (parent->complete_load == 0)
