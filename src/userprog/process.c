@@ -75,6 +75,15 @@ tid_t process_execute (const char *file_name)
   return tid;
 }
 
+static void
+check_stack_overflow(void **esp, size_t size)
+{
+  if ((uint8_t *)(*esp) - size < (uint8_t *)PHYS_BASE - PGSIZE)
+  {
+    thread_exit();
+  }
+}
+
 /* A thread function that loads a user process and starts it
    running. */
 static void
@@ -108,33 +117,40 @@ start_process (void *file_name_)
   for (int i = args - 1; i >= 0; i--)
   {
     int len = strlen (argv[i]) + 1;
+    check_stack_overflow(esp, len);
     *esp -= len;
     memcpy (*esp, argv[i], len);
     argv[i] = *esp;
   }
 
   int padding = (int)*esp % 8;
+  check_stack_overflow(esp, padding);
   for (int i = 0; i < padding; i++)
   {
     (*esp)--;
     **(uint8_t **)esp = 0; 
   }
 
+  check_stack_overflow(esp, 4);
   (*esp) -= 4;
   *(uint8_t *)*esp = 0;
 
   for (int i = args -1; i >= 0; i--)
   {
+    check_stack_overflow(esp, sizeof(uint32_t *));
     (*esp) -= sizeof (uint32_t **);
     *(uint32_t **)*esp = argv[i];
   }
 
+  check_stack_overflow(esp, sizeof(uint32_t *));
   *esp -= sizeof(uint32_t **);
   *(uint32_t *)*esp = *esp + 4; 
 
+  check_stack_overflow(esp, sizeof(uint32_t));
   *esp -= sizeof(uint32_t);
   *(uint32_t *)*esp = args;
 
+  check_stack_overflow(esp, 4);
   (*esp) -= 4;
   *(uint32_t *)*esp = 0;
 

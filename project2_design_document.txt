@@ -1,0 +1,334 @@
+         +--------------------------+
+         |     CSE 311              |
+         | PROJECT 2: USER PROGRAMS |
+         |     DESIGN DOCUMENT      |
+         +--------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Taejun Han <cheld7132@unist.ac.kr>
+FirstName LastName <email@domain.example>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+         ARGUMENT PASSING
+         ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+None
+
+In my implementation of argument passing in Pintos, I utilized local variables within the `start_process` function to tokenize the command-line arguments and set up the stack. This approach did not necessitate any changes or additions to existing `struct` members, global or static variables, `typedef`, or enumerations. By using local variables like `argv`, `args`, and `token` within the function scope, I was able to effectively manage the argument parsing and stack setup processes without modifying the broader data structures of the program.
+
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+Tokenizing Arguments
+
+First, split the `file_name` string into individual arguments using the `strtok_r` function. The `strtok_r` function splits the given string by the specified delimiter (`" "`, space). During this process, each token is stored in the `argv` array, and the number of arguments is tracked through the `args` variable.
+
+char *argv[64];
+int args = 0;
+
+char *token, *save_ptr;
+for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+{
+ argv[args] = token;
+ args++;
+}
+
+Next, the arguments stored in `argv` are pushed onto the stack in reverse order. This is to ensure that `argv[]` can be accessed in the correct order. This ensures that the arguments are passed in the correct order to the `main` function.
+
+for (int i = args - 1; i >= 0; i--)
+{
+ int len ​​= strlen(argv[i]) + 1;
+ *esp -= len;
+ memcpy(*esp, argv[i], len);
+ argv[i] = *esp;
+}
+
+Complies with the x86 calling convention by aligning the stack pointer to a multiple of 8 bytes. This avoids stack alignment issues. Add padding to ensure the stack pointer is aligned properly.
+
+int padding = (int)*esp % 8;
+for (int i = 0; i < padding; i++)
+{
+ (*esp)--;
+ **(uint8_t **)esp = 0;
+}
+
+Finally, I push the address of `argv`, the number of arguments (`argc`), and a null pointer sentinel onto the stack. This allows the `main` function to be called correctly.
+
+(*esp) -= 4;
+*(uint8_t *)*esp = 0;
+
+for (int i = args - 1; i >= 0; i--)
+{
+ (*esp) -= sizeof(uint32_t **);
+ *(uint32_t **)*esp = argv[i];
+}
+
+*esp -= sizeof(uint32_t **);
+*(uint32_t *)*esp = *esp + 4;
+
+*esp -= sizeof(uint32_t);
+*(uint32_t *)*esp = args;
+
+(*esp) -= 4;
+*(uint32_t *)*esp = 0;
+
+The check_stack_overflow function is defined to take the current stack pointer (esp) and the size of the data to be pushed. It checks if the stack pointer, after decrementing by the specified size, would fall below the page limit (PHYS_BASE - PGSIZE).
+
+In the start_process function, before any operation that decreases the stack pointer, check_stack_overflow is called to ensure enough space is available. If there isn't enough space, the function terminates the current thread to prevent stack overflow.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+Pintos implements strtok_r() instead of strtok() due to the reentrant nature of strtok_r(). Reentrant functions are designed to be safely called and executed simultaneously by multiple threads. strtok_r() takes an additional argument, a pointer to a save_ptr, which maintains context between successive calls, making it thread-safe.
+
+On the other hand, strtok() uses a static variable to keep track of its position within the string, which makes it unsafe for use in a multi-threaded environment because concurrent calls could overwrite this static variable, leading to incorrect behavior. Since Pintos is designed to support multi-threading and concurrency, using strtok_r() ensures that argument parsing is safe and reliable across different threads, preventing potential bugs and data corruption.
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+In Unix, the shell handles command parsing. This means users can write and use shell scripts to automate tasks. They can easily customize how commands run and connect different commands together using pipes. This makes the system more flexible and easier to adapt to different needs.
+
+By letting the shell handle command parsing, the Unix kernel stays simpler. The kernel can focus on managing hardware and running programs, without worrying about how commands are split into parts. This makes the kernel more efficient and reliable, as it has fewer tasks to handle and less code where bugs might occur
+
+           SYSTEM CALLS
+           ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+(1) define FDT_COuNT_LIMIT
+
+Purpose: Defines the maximum limit for the file descriptor table (FDT) entries.
+
+(2) struct file *fdt[128];
+Purpose: An array representing the file descriptor table (FDT) which holds pointers to open file structures.
+
+(3): int next_fd;
+Purpose: A variable to find the next available file descriptor index for allocation.
+
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+Opening a File
+   When a file is opened, the OS finds the next available file descriptor.
+   This file descriptor is then associated with a `struct file` pointer in the FDT.
+
+Using the File Descriptor
+   The process uses the file descriptor for operations like read, write, or close.
+   The OS uses the FDT to translate the file descriptor to the actual file structure.
+
+Closing a File:
+   When the file is closed, the entry is removed from the FDT, making the file descriptor available for future use.
+
+File descriptors are unique within a single process. Each process has its own file descriptor table, so the same file descriptor number can be used by different processes to refer to different files.
+
+Example:
+Process A: File descriptor 3 refers to "file1.txt".
+Process B: File descriptor 3 could refer to "file2.txt".
+
+This isolation ensures that file operations in one process do not interfere with those in another process, even if the same file descriptor numbers are used.
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+read
+
+Confirm valid address: Call the `valid_address(buffer)` function to check whether the user buffer address is valid. This function ensures that the given pointer is within the user address space to avoid invading kernel memory.
+
+Action according to file descriptor
+ Standard input (file descriptor 0): If the file descriptor is 0, keyboard input is processed. Use the `input_getc()` function to read one character from the keyboard and store it in a buffer. Repeat until input ends or a null character (`'\0'`) is encountered.
+
+ Standard output (file descriptor 1) : If the file descriptor is 1, -1 is returned because read operations are not supported.
+ 
+General file descriptor: If it is a different file descriptor, it looks for that file in the current thread's file descriptor table. Returns -1 if the file is not open. Otherwise, use the `file_read` function to read data from the file and store it in a buffer.
+
+write
+
+Confirm valid address: Call the `valid_address(buffer)` function to check whether the user buffer address is valid. This function ensures that the given pointer is within the user address space to avoid invading kernel memory.
+
+Action according to file descriptor
+ Standard input (file descriptor 0): If the file descriptor is 0, write operation is not supported, so -1 is returned.
+
+ Standard output (file descriptor 1): If the file descriptor is 1, use the `putbuf` function to output the data in the buffer to the console. Returns the number of bytes printed.
+
+General file descriptor: If it is a different file descriptor, it looks for that file in the current thread's file descriptor table. Returns -1 if the file is not open. Otherwise, use the `file_write` function to write the data in the buffer to a file.
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+In Pintos, accessing user program memory at a user-specified address can often fail due to bad pointer values. These failures must result in process termination to maintain system stability and security. System calls, which frequently access user memory, need robust error-handling mechanisms. Here are the strategies adopted to manage these issues effectively:
+
+1. Centralized Address Validation
+To avoid cluttering the main logic with repetitive error checks, we use a centralized address validation function. This function is called at the beginning of each system call and whenever user memory is accessed within the call.
+
+Example Function:
+```c
+void valid_address(const uint64_t *cur_addr) {
+  if (!(is_user_vaddr(cur_addr)) || cur_addr == NULL || pagedir_get_page(thread_current()->pagedir, cur_addr) == NULL) {
+    exit(-1);
+  }
+}
+```
+This function ensures that the provided address is within the user address space and is valid. If the address is invalid, the process is terminated immediately.
+
+2. Resource Management and Cleanup
+Ensuring that all temporarily allocated resources are freed when an error is detected is crucial. This is achieved by:
+
+Using Resource Management Functions:
+Functions like `exit()` handle the cleanup of resources systematically.
+
+Example: `exit` Function
+```c
+void exit(int status) { 
+  struct thread *t = thread_current();
+  t->status_exit = status;
+  printf("%s: exit(%d)\n", thread_name(), status);
+
+  for (int i = 3; i < 128; i++) {
+    if (thread_current()->fdt[i] != NULL)
+      close(i);
+  }
+  thread_exit();
+}
+```
+This function ensures that all open file descriptors are closed before the thread exits.
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+Accessing user memory from the kernel is a critical task in operating system development. In Pintos, the approach taken to implement this functionality ensures safety, reliability, and maintainability. Here are the key reasons for the chosen implementation:
+
+ 1. Safety and Security
+   Validation of User Addresses: The use of a centralized function, `valid_address()`, to validate user addresses ensures that any pointer passed to the kernel is checked for validity. This helps prevent the kernel from accessing invalid or malicious memory locations, which could lead to crashes or security vulnerabilities.
+
+   Error Handling and Process Termination: If an invalid address is detected, the process is terminated immediately. This ensures that the system remains stable and that potentially harmful operations are stopped early.
+
+2. Efficiency and Performance
+   - **Minimal Overhead:** The validation function and memory access wrappers introduce minimal overhead, ensuring that system call performance is not significantly impacted. This balance between safety and performance is crucial for an efficient operating system.
+
+3. Ease of Debugging and Maintenance
+   Consistent Error Handling: By using consistent functions for validation and memory access, debugging becomes easier. Developers can focus on these functions when issues arise, rather than searching through scattered validation checks.
+   Clear Separation of Concerns: The primary logic of system calls is not obscured by error-handling code, making the codebase easier to read and maintain.
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+The design of file descriptors in Pintos has several advantages and disadvantages. This design uses a file descriptor table (FDT) for each process to manage open files, which is indexed by file descriptors.
+
+Advantages
+
+1.  Isolation and Security:
+   - Process Isolation: Each process has its own FDT, ensuring that file descriptors are unique within the process and not across the entire system. This isolation prevents one process from accidentally or maliciously accessing the files of another process.
+
+2. **Simplicity and Clarity:**
+   - Simple Management: The use of an array to manage file descriptors makes the design simple and straightforward. Operations such as opening, closing, reading, and writing files are easy to implement and understand.
+   - Fixed Limits: By setting a fixed size for the FDT (e.g., 128 entries), the implementation avoids the complexity of dynamically resizing the table. This simplicity helps in managing resources efficiently.
+
+3. Efficiency:
+   - Constant Time Access: Accessing a file descriptor is an O(1) operation since it involves a direct index lookup in the array. This efficiency is beneficial for performance-critical operations.
+
+Disadvantages
+
+1. Limited Scalability:
+   - Fixed Size Limitation: The fixed size of the FDT limits the number of files a process can open simultaneously. If a process needs to open more files than the FDT can handle, it will fail, which can be a limitation for applications requiring a large number of open files.
+   - Hard-coded Limits: The fixed limit (e.g., 128 file descriptors) may need to be adjusted based on application needs, and changing this limit requires modifying the code and recompiling.
+
+2. Resource Management:
+   - Resource Leaks: If not managed carefully, there can be issues with resource leaks. For example, if a process does not close its file descriptors properly, the associated resources may not be freed, leading to resource exhaustion.
+
+3. Error Prone:
+   - Manual Management: The design requires manual management of file descriptors, including allocating, deallocating, and validating entries in the FDT. This manual management can be error-prone and may lead to bugs if not handled correctly.
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+         SURVEY QUESTIONS
+         ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
