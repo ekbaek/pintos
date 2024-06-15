@@ -293,13 +293,13 @@ pid_t exec (const char *cmd_line)
 
   strlcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
 
+  struct thread *cur = thread_current();
+  cur->complete_load = 0;
+
   pid_t pid = process_execute(fn_copy);
   if (pid == -1) 
     exit(-1);
 
-  // Parent process waits for load success/failure signal
-  struct thread *cur = thread_current();
-  cur->complete_load = 0;
   sema_down(&cur->load_semaphore);
 
   if (cur->complete_load == -1)
