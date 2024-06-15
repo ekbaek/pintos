@@ -9,7 +9,7 @@
 >> Fill in the names and email addresses of your group members.
 
 Taejun Han <cheld7132@unist.ac.kr>
-FirstName LastName <email@domain.example>
+Eungyeong Baek <ekbaek@unist.ac.kr>
 
 ---- PRELIMINARIES ----
 
@@ -122,16 +122,59 @@ By letting the shell handle command parsing, the Unix kernel stays simpler. The 
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-(1) define FDT_COuNT_LIMIT
+In thread.h file,
+#define FDT_COUNT_LIMIT 128
 
-Purpose: Defines the maximum limit for the file descriptor table (FDT) entries.
+It defines the maximum limit for the file descriptor table (FDT) entries.
 
-(2) struct file *fdt[128];
-Purpose: An array representing the file descriptor table (FDT) which holds pointers to open file structures.
+And in struct thread in thread.h file, 
+struct thread
+  {
+#ifdef USERPROG
+    int status_exit; 
+    int complete_load; 
+    struct semaphore wait_semaphore;
+    struct semaphore exit_semaphore;
+    struct semaphore load_semaphore;
 
-(3): int next_fd;
-Purpose: A variable to find the next available file descriptor index for allocation.
+    struct thread *parent_thread;
+    struct list child_list;
+    struct list_elem child_list_elem;
 
+    struct file *fdt[128];
+    int next_fd;
+#endif
+  };
+
+1. int status_exit
+It stores the exit status of the thread to be retrieved by the parent.
+
+2. int complete_load
+It indicates if the child process has successfully loaded (1) or failed to load (-1).
+
+3. struct semaphore wait_semaphore
+It used by the parent to wait until the child process exits.
+
+4. struct semaphore exit_semaphore
+It used by the child process to signal the parent upon exit, ensuring proper synchronization.
+
+5. struct semaphore load_semaphore
+It used by the parent to wait for the child process to complete loading.
+
+6. struct thread *parent_thread
+It points to the parent thread, allowing the child to access and modify the parent's state.
+
+7. struct list child_list
+It maintains a list of child processes for each parent, used for tracking and synchronization.
+
+8. struct list_elem child_list_elem
+It list element used to link threads in the child_list
+
+9. struct file *fdt[128]
+An array representing the file descriptor table (FDT) which holds pointers to open file structures.
+
+10. int next_fd
+A variable to find the next available file descriptor index for allocation.
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
@@ -190,8 +233,64 @@ General file descriptor: If it is a different file descriptor, it looks for that
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+In our implementation, we minimize the number of page table inspections when a system call copies data from user space to the kernel by using the valid_address function. 
+This function checks if the address is a valid user address, not NULL, and that there is a valid page for the address in the page table. 
+This is done using pagedir_get_page. 
+Here is an analysis of the number of page table inspections required for copying different amounts of data.
+
+Copying 4,096 bytes(full page) is exactly one page(4KB). 
+The least and greatest possible number of page table inspections are following.
+
+- Least Inspections is 1. If the first inspection (using pagedir_get_page) returns a page head, indicating the start of a page, no further inspections are needed. 
+This can be determined from the address, and it implies that the entire page can contain the data.
+- Greatest Inspections is 4096. If the data is not contiguous and each byte lies in a different page, every address must be inspected to ensure valid access. 
+However, if the data is contiguous, the greatest number of inspections would be 2. 
+one for the start pointer and one for the end pointer of the full page data, ensuring that both are mapped.
+
+
+Copying 2 bytes is very small compared to the page size (4KB). 
+The least and greatest possible number of page table inspections are following.
+
+- Least Inspections is 1. If the first inspection shows that there is more than 2 bytes space to the end of the page, no further inspections are necessary.
+- Greatest Inspections is 2. If the 2 bytes span a page boundary, two inspections are needed. one to check where the first byte is located and another to check where the second byte is located.
+
+To reduce the number of inspections, optimization strategies can be employed. 
+For example, checking larger contiguous memory blocks at once and using caching to reduce repetitive page table inspections can help. 
+The extent of improvement depends on the specific implementation, but generally, optimizing access patterns can significantly reduce inspection counts.
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+The system call handler defined in syscall_handler detects the SYS_WAIT system call and validates the address. 
+It then calls the wait function and it in turn calls "process_wait" function with passing pid.
+In the process_wait function, the current thread (representing the parent process) searches for the child process within its child list. 
+If the child process is found, the parent process waits on a semaphore (wait_semaphore) associated with the child thread. 
+This semaphore ensures that the parent thread is blocked until the child thread terminates.
+
+When the child process terminates, it calls the exit system call. The exit function in syscall.c is defined as follows:
+void
+exit (int status)
+{ 
+  struct thread *t = thread_current();
+  t->status_exit = status;
+  printf("%s: exit(%d)\n", thread_name(), status);
+  
+  for (int i=3; i<128; i++) 
+  {
+    if (thread_current ()->fdt[i] != NULL)
+      close(i);
+  }
+  thread_exit();
+}
+
+In this function, the child process sets its exit status and signals the wait_semaphore to wake up the waiting parent process. 
+The parent process then retrieves the exit status and returns it. 
+Additionally, the parent process removes the child process from its child list using list_remove(&(t->child_list_elem)). 
+And the child process signals the exit_semaphore to complete its termination process.
+
+Semaphores are used to handle synchronization between parent and child processes. 
+The parent process waits on the wait_semaphore until the child process exits. 
+The child process, upon exiting, signals this semaphore to unblock the parent process.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -251,12 +350,50 @@ This function ensures that all open file descriptors are closed before the threa
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
+Our implementation ensures that the "exec" system call returns -1 
+if loading the new executable fails and does not return before the new executable has completed loading 
+by using a synchronization mechanism involving semaphores.
+So in struct thread in thread.h file, we defined "complete_load".
+
+When a new executable is to be loaded, the parent thread sets a complete_load status to 0, indicating that the load process has started but not yet completed. 
+The parent then creates the child thread to load the executable and immediately waits on a semaphore (load_semaphore). 
+This semaphore will only be signaled by the child thread once the load attempt has completed, ensuring that the parent thread does not proceed until the child has finished loading the executable.
+
+In the child thread, once the loading process is attempted, it sets the complete_load status to 1 if successful or -1 if unsuccessful and then signals the semaphore to wake the parent thread. 
+The parent thread, upon waking, checks the complete_load status to determine whether the load was successful or not. 
+If the load failed (complete_load is -1), the exec system call returns -1.
+
+This design guarantees that the load success or failure status is correctly passed back to the parent thread and that the exec system call does not return prematurely.
+
+
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
 >> calls wait(C) before C exits?  After C exits?  How do you ensure
 >> that all resources are freed in each case?  How about when P
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
+
+In our implementation, we ensure proper synchronization between the parent process (P) and the child process (C) and avoid race conditions by using semaphores and lists. 
+The child processes are tracked using a child_list in the parent thread structure, which keeps track of the exit status of each child process. 
+A detailed explanation for each scenario is following.
+
+When the parent process (P) calls wait(C) before the child process (C) exits, P waits until C exits. 
+P uses the wait_semaphore to wait, and C signals this semaphore when it exits, waking up P. 
+This synchronization is achieved using semaphores to avoid race conditions.
+
+If P calls wait(C) after C has already exited, P can immediately check C's exit status. 
+Since C signals the wait_semaphore upon exiting, P retrieves the exit status of C through the semaphore.
+
+If P terminates without waiting for C to exit, P's child list is freed, and all associated resources are cleaned up. 
+When C attempts to set its exit status, it detects that the parent has already terminated and ignores it.
+
+If C exits first and then P terminates, the resources are cleaned up similarly. 
+P frees its resources and empties its child list. 
+Semaphores are used to ensure proper synchronization and avoid race conditions.
+
+A special case occurs when the child process exits while the parent has already terminated. 
+In this case, the child detects the absence of the parent and does not signal the parent. 
+Proper synchronization is ensured to avoid race conditions and guarantee resource deallocation.
 
 ---- RATIONALE ----
 
@@ -308,6 +445,29 @@ Disadvantages
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+Our code uses the default mapping where tid_t and pid_t are the same. 
+Although our code maintains this default mapping, changing it could offer several advantages.
+By default, tid_t represents a thread identifier, and pid_t represents a process identifier. 
+When these values are the same, they are used interchangeably to identify both threads and processes.
+
+We will explain the advantages of changing the mapping.
+(1) security and stability.
+Process Isolation: By differentiating tid_t and pid_t, we can more clearly separate threads and processes. 
+This enhances security and stability, as knowing a process's pid_t would not necessarily allow access to its threads without knowing the tid_t.
+Avoidance of conflicts: Using the same identifier for both processes and threads can lead to conflicts. 
+Differentiating the identifiers can reduce the possibility of such conflicts.
+
+(2)Ease of debugging and management
+Easy Identification: Differentiating pid_t and tid_t makes it easier to identify processes and threads, which is helpful for system debugging and monitoring tools.
+Simplified Tracking: It becomes easier to distinguish between processes and threads in system logs and debugging information, helping to pinpoint the exact cause of issues.
+
+(3)Resource management
+Clear Allocation and Deallocation: When processes and threads have different identifiers, it clarifies the allocation and deallocation of resources. 
+This enhances the efficiency of resource management and helps prevent resource leaks.
+
+So, changing the default mapping from tid_t to pid_t provides advantages in terms of security, stability, debugging, management, and resource handling. 
+Although this change might increase system complexity, the benefits mentioned above can outweigh this complexity.
 
          SURVEY QUESTIONS
          ================
