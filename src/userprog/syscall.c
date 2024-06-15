@@ -9,15 +9,15 @@
 #include "threads/palloc.h"
 #include "lib/user/syscall.h"
 #include "kernel/stdio.h"
+#include "pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 struct file *getfile (int fd);
 void valid_address(const uint64_t *cur_addr);
 
-
 void valid_address(const uint64_t *cur_addr)
 {
-	if (!(is_user_vaddr(cur_addr)))
+	if (!(is_user_vaddr(cur_addr)) || cur_addr == NULL || pagedir_get_page(thread_current()->pagedir, cur_addr)==NULL)
 	{
 		exit(-1);
 	}
@@ -26,7 +26,6 @@ void valid_address(const uint64_t *cur_addr)
 void
 syscall_init (void) 
 {
-  //lock_init (&filesys_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -37,66 +36,54 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   switch (*(uint32_t *)sp)
   {
-    case SYS_HALT:                   // args number: 0
+    case SYS_HALT:                 
       halt ();
       break;
-
-    case SYS_EXIT:                   // args number: 1
+    case SYS_EXIT:       
       valid_address (sp + 4);
       exit( *(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_EXEC:                   // args number: 1
+    case SYS_EXEC:                 
       valid_address (sp + 4);
       f->eax = exec ( (const char *)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_WAIT:                   // args number: 1
+    case SYS_WAIT:                  
       valid_address (sp + 4);
       f->eax = wait ( (pid_t *)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_CREATE:                 // args number: 2
+    case SYS_CREATE:             
       valid_address (sp + 4);
       f->eax = create ( (const char *)*(uint32_t *)(sp + 4),  (const char *)*(uint32_t *)(sp + 8) );
       break;
-
-    case SYS_REMOVE:                 // args number: 1
+    case SYS_REMOVE:              
       valid_address (sp + 4);
       f->eax = remove ( (const char *)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_OPEN:                   // args number: 1
+    case SYS_OPEN:                  
       valid_address (sp + 4);
       f->eax = open ( (const char *)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_FILESIZE:               // args number: 1
+    case SYS_FILESIZE:             
       valid_address (sp + 4);
       f->eax = filesize ( (int)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_READ:                   // args number: 3
+    case SYS_READ:                  
       valid_address (sp + 4);
       f->eax = read ( (int)*(uint32_t *)(sp + 4), (void *)*(uint32_t *)(sp + 8), (unsigned)*((uint32_t *)(sp + 12)) );
       break;
-
-    case SYS_WRITE:                  // args number: 3
+    case SYS_WRITE:              
       valid_address (sp + 4);
       f->eax = write( (int)*(uint32_t *)(sp + 4), (void *)*(uint32_t *)(sp + 8), (unsigned)*((uint32_t *)(sp + 12)) );
       break;
-
-    case SYS_SEEK:                   // args number: 2
+    case SYS_SEEK:         
       valid_address (sp + 4);
       seek ( (int)*(uint32_t *)(sp + 4), (unsigned)*((uint32_t *)(sp + 8)) );
       break;
-
-    case SYS_TELL:                   // args number: 1
+    case SYS_TELL:              
       valid_address (sp + 4);
       f->eax = tell ( (int)*(uint32_t *)(sp + 4) );
       break;
-
-    case SYS_CLOSE:                  // args number: 1
+    case SYS_CLOSE:              
       valid_address (sp + 4);
       close ( (int)*(uint32_t *)(sp + 4) );
       break;

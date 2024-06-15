@@ -182,9 +182,9 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  // t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-  // if (t->fdt == NULL)
-  //   return TID_ERROR;
+  if (tid == NULL)
+    return TID_ERROR;
+    
   t->fdt[0] = 1;
   t->fdt[1] = 2;
   t->next_fd = 2;
@@ -204,8 +204,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-// 추가함
-  //list_push_back(&(thread_current()->child_list), &(t->child_list_elem));
   /* Add to run queue. */
   thread_unblock (t);
 
