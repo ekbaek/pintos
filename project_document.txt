@@ -124,6 +124,17 @@ This method is simple and reduces wasted CPU cycles by waking up threads only wh
 This design integrates seamlessly with Pintos' existing timer and scheduling infrastructure without requiring major modifications to other parts of the system.
 
 
+Compared to other potential designs, such as using multiple data structures or more complex scheduling algorithms, this design offers several advantages.
+
+First using a single list for all sleeping threads, as opposed to separate structures or more complex data structures 
+such as balanced trees, is simpler to implement and easier to debug.
+Second, priority queues provide O(log n) insertions and deletions, but the simplicity of a single list containing operations 
+with complexity O(1) for inserting at the end and O(n) for traversal is a trade-off between performance and complexity. Provides the right balance.
+Third, directly managing thread state through simple list operations provides precise control over thread behavior, 
+making the system more predictable and easier to manage under varying load conditions.
+
+Therefore, among other designs, this design was selected and implemented.
+
 
              PRIORITY SCHEDULING
              ===================
@@ -200,6 +211,8 @@ This is because the thread at the front always receives the donation, but the fa
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+
 
 ---- ALGORITHMS ----
 
